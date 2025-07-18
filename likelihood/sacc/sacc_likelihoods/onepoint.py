@@ -40,7 +40,10 @@ def extract_one_point_prediction(sacc_data, block, data_type, section, **kwargs)
             x_nominal = np.array(sacc_data.get_tag("mass", data_type, t))
         else:
             x_nominal = np.array(sacc_data.get_tag("lum", data_type, t))
-
+        #tmp test:
+        bins = np.linspace(9.3, 11.3, 12 + 1, endpoint=True)
+        x_nominal = 10.0**((bins[1:] + bins[:-1]) / 2.0)
+        
         if window is None:
             binned_theory = theory_spline(x_nominal)
         else:
@@ -67,7 +70,7 @@ def extract_one_point_prediction(sacc_data, block, data_type, section, **kwargs)
         "mass_max": np.concatenate(mass_max_vector),
         "mass_bin": np.concatenate(bins_vector),
     }
-
+    print(theory_vector)
     return theory_vector, metadata
 
 

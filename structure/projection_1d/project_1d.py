@@ -10,7 +10,7 @@ by multiplication of ratio of volumes according to More et al. 2013 and More et 
 
 from cosmosis.datablock import option_section
 import numpy as np
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, InterpolatedUnivariateSpline
 from scipy.integrate import simpson
 from astropy.cosmology import FlatLambdaCDM, Flatw0waCDM, LambdaCDM
 
@@ -22,7 +22,7 @@ class TomoNzKernel(object):
         for i,nz in enumerate(nzs):
             self.nbin += 1
             if norm:
-                nz_spline = interp.InterpolatedUnivariateSpline(self.z, nz)
+                nz_spline = InterpolatedUnivariateSpline(self.z, nz)
                 norm = nz_spline.integral(self.z[0], self.z[-1])
                 nz = nz/norm
                 self.nzs[i+1] = nz
@@ -86,7 +86,7 @@ def setup(options):
     elif suffix == 'med':
         config['suffixes'] = ['_med']
     else:
-        config['suffixes'] = [suffix]
+        config['suffixes'] = [f"_{suffix}"]
     
     config['nbins'] = len(config['suffixes'])
     config['sample'] = options.get_string(option_section, 'sample', '')
@@ -126,7 +126,7 @@ def execute(block, config):
         nz = TomoNzKernel.from_block(block, config['sample'], norm=True)
     except:
         nz = None
-    
+
     if config['correct_cosmo']:
         zmin = config['zmin']
         zmax = config['zmax']
@@ -150,7 +150,7 @@ def execute(block, config):
         z_obs, obs_arr, obs_func_interp = load_and_interpolate_obs(block, input_section_name, suffixes[i])
 
         if z_obs is not None:
-            obs_func = simpson(nz.nzs[i+1] * obs_func_interp(nz.z), nz.z, axis=0)
+            obs_func = simpson(nz.nzs[i+1][:, np.newaxis] * obs_func_interp(nz.z), nz.z, axis=0)
         else:
             obs_func = obs_func_interp(1)
 
@@ -166,9 +166,12 @@ def execute(block, config):
             ratio_obs = comoving_volume_model / comoving_volume_data
             obs_func = obs_func_in * ratio_obs
             
-        block.put_double_array_1d(output_section_name, f'bin_{i + 1}', obs_func)
-        block.put_double_array_1d(output_section_name, f'obs_{i + 1}', obs_arr[i])
-        block.put_double_array_1d(output_section_name, f'mass_{i + 1}', obs_arr[i])
+        block.replace_double_array_1d(output_section_name, f'bin_{i + 1}', obs_func)
+        block.replace_double_array_1d(output_section_name, f'obs_{i + 1}', obs_arr)
+        block.replace_double_array_1d(output_section_name, f'mass_{i + 1}', obs_arr)
+        #block.put_double_array_1d(output_section_name, f'bin_{i + 1}', obs_func)
+        #block.put_double_array_1d(output_section_name, f'obs_{i + 1}', obs_arr)
+        #block.put_double_array_1d(output_section_name, f'mass_{i + 1}', obs_arr)
 
     block[output_section_name, 'nbin'] = nbins
     block[output_section_name, 'sample'] = config['sample'] if config['sample'] is not None else 'None'
