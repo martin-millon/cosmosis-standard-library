@@ -8,7 +8,7 @@ for the difference in input data cosmology to the predicted output cosmology
 by multiplication of ratio of volumes according to More et al. 2013 and More et al. 2015
 """
 
-from cosmosis.datablock import option_section
+from cosmosis.datablock import option_section, names
 import numpy as np
 from scipy.interpolate import interp1d, InterpolatedUnivariateSpline
 from scipy.integrate import simpson
@@ -36,7 +36,13 @@ class TomoNzKernel(object):
             nz = block[section_name, "bin_%d"%i]
             nzs.append(nz)
         return cls(z, nzs, norm=norm)
-
+    
+    @property
+    def interpolated_nz(self):
+        nz_interp = []
+        for i in range(self.nbin):
+            nz_interp.append(interp1d(self.z, self.nzs[i+1], kind='linear', fill_value=0.0, bounds_error=False))
+        return nz_interp
 
 def load_and_interpolate_obs(block, obs_section, suffix_in):
     """
@@ -83,8 +89,6 @@ def setup(options):
     if suffix.startswith("{") and suffix.endswith("}"):
         suffix_range = suffix[2:-1].split("-")
         config['suffixes'] = [f"_{x}" for x in range(int(suffix_range[0]), int(suffix_range[1])+1)]
-    elif suffix == 'med':
-        config['suffixes'] = ['_med']
     else:
         config['suffixes'] = [f"_{suffix}"]
     
@@ -134,14 +138,14 @@ def execute(block, config):
         cosmo_model_data = config['cosmo_model_data']
 
         # Adopting the same cosmology object as in halo_model_ingredients module
-        tcmb = block.get_double(cosmo_params, 'TCMB', default=2.7255)
+        tcmb = block.get_double(names.cosmological_parameters, 'TCMB', default=2.7255)
         cosmo_model_run = Flatw0waCDM(
-            H0=block[cosmo_params, 'hubble'],
-            Ob0=block[cosmo_params, 'omega_b'],
-            Om0=block[cosmo_params, 'omega_m'],
-            m_nu=[0, 0, block[cosmo_params, 'mnu']],
-            Tcmb0=tcmb, w0=block[cosmo_params, 'w'],
-            wa=block[cosmo_params, 'wa']
+            H0=block[names.cosmological_parameters, 'hubble'],
+            Ob0=block[names.cosmological_parameters, 'omega_b'],
+            Om0=block[names.cosmological_parametersarams, 'omega_m'],
+            m_nu=[0, 0, block[names.cosmological_parameters, 'mnu']],
+            Tcmb0=tcmb, w0=block[names.cosmological_parameters, 'w'],
+            wa=block[names.cosmological_parameters, 'wa']
         )
         h_run = cosmo_model_run.h
 
@@ -150,7 +154,9 @@ def execute(block, config):
         z_obs, obs_arr, obs_func_interp = load_and_interpolate_obs(block, input_section_name, suffixes[i])
 
         if z_obs is not None:
-            obs_func = simpson(nz.nzs[i+1][:, np.newaxis] * obs_func_interp(nz.z), nz.z, axis=0)
+            z = block.get_double_array_1d(names.distances, 'z')
+            nz_inter = nz.interpolated_nz[i]
+            obs_func = simpson(nz_inter(z)[:, np.newaxis] * obs_func_interp(z), z, axis=0) 
         else:
             obs_func = obs_func_interp(1)
 
@@ -165,14 +171,10 @@ def execute(block, config):
 
             ratio_obs = comoving_volume_model / comoving_volume_data
             obs_func = obs_func_in * ratio_obs
-            
-        block.replace_double_array_1d(output_section_name, f'bin_{i + 1}', obs_func)
-        block.replace_double_array_1d(output_section_name, f'obs_{i + 1}', obs_arr)
-        block.replace_double_array_1d(output_section_name, f'mass_{i + 1}', obs_arr)
-        #block.put_double_array_1d(output_section_name, f'bin_{i + 1}', obs_func)
-        #block.put_double_array_1d(output_section_name, f'obs_{i + 1}', obs_arr)
-        #block.put_double_array_1d(output_section_name, f'mass_{i + 1}', obs_arr)
 
+        block.put_double_array_1d(output_section_name, f'bin_{i + 1}', np.squeeze(obs_func))
+        block.put_double_array_1d(output_section_name, f'obs_{i + 1}', np.squeeze(obs_arr))
+        block.put_double_array_1d(output_section_name, f'mass_{i + 1}', np.squeeze(obs_arr))
     block[output_section_name, 'nbin'] = nbins
     block[output_section_name, 'sample'] = config['sample'] if config['sample'] is not None else 'None'
 

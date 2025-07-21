@@ -39,7 +39,8 @@ def extract_one_point_prediction(sacc_data, block, data_type, section, **kwargs)
             x_nominal = np.array(sacc_data.get_tag("mass", data_type, t))
         else:
             x_nominal = np.array(sacc_data.get_tag("lum", data_type, t))
-        #tmp test:
+        
+        #tmp test, remove after!:
         bins = np.linspace(9.3, 11.3, 12 + 1, endpoint=True)
         x_nominal = 10.0**((bins[1:] + bins[:-1]) / 2.0)
         
