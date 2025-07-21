@@ -79,6 +79,9 @@ def setup(options):
     input_section_name = options.get_string(option_section, 'input_section_name', default='stellar_mass_function')
     config['output_section_name'] = options.get_string(option_section, 'output_section_name', default='smf')
     config['correct_cosmo'] = options.get_bool(option_section, 'correct_cosmo', default=False)
+    config['observable_type'] = options.get_string(option_section, 'observable_type', default='mass')
+    if config['observable_type'] not in ['mass', 'luminosity']:
+        raise ValueError('Currently supported observable types are mass or luminosity (with observable function being either stellar mass function or luminosity function).')
 
     if ":" in input_section_name:
         input_section_name, suffix = input_section_name.split(':',1)
@@ -173,8 +176,7 @@ def execute(block, config):
             obs_func = obs_func_in * ratio_obs
 
         block.put_double_array_1d(output_section_name, f'bin_{i + 1}', np.squeeze(obs_func))
-        block.put_double_array_1d(output_section_name, f'obs_{i + 1}', np.squeeze(obs_arr))
-        block.put_double_array_1d(output_section_name, f'mass_{i + 1}', np.squeeze(obs_arr))
+        block.put_double_array_1d(output_section_name, f'{config["observable_type"]}_{i + 1}', np.squeeze(obs_arr))
     block[output_section_name, 'nbin'] = nbins
     block[output_section_name, 'sample'] = config['sample'] if config['sample'] is not None else 'None'
 
