@@ -9,6 +9,14 @@ from scipy.interpolate import InterpolatedUnivariateSpline, RectBivariateSpline,
 # Finally we can now import camb
 import camb
 
+# Get the camb functions from the camb_interface module.
+# Should really put this somewhere else!
+camb_dir = pathlib.Path(__file__).parent.resolve() / "camb"
+sys.path.append(str(camb_dir))
+from camb_interface import matter_power_section_names, be_quiet_camb, get_optional_params, get_choice, make_z_for_pk, extract_recombination_params, extract_reionization_params, extract_dark_energy_params, extract_initial_power_params, extract_nonlinear_params, save_derived_parameters, save_distances
+
+# TODO: maybe we import camb background calculations from camb_interface, so it is eaiser to update things?
+
 import cosmopower as cp
 import numpy as np
 import os
@@ -27,72 +35,25 @@ DEFAULT_A_S = 2.1e-9
 
 C_KMS = 299792.458
 
-# See this table for description:
-#https://camb.readthedocs.io/en/latest/transfer_variables.html#transfer-variables
-matter_power_section_names = {
-    'delta_cdm': 'dark_matter_power',
-    'delta_baryon': 'baryon_power',
-    'delta_photon': 'photon_power',
-    'delta_neutrino': 'massless_neutrino_power',
-    'delta_nu': 'massive_neutrino_power',
-    'delta_tot': 'matter_power',
-    'delta_nonu': 'cdm_baryon_power',
-    'delta_tot_de': 'matter_de_power',
-    'weyl': 'weyl_curvature_power',
-    'v_newtonian_cdm': 'cdm_velocity_power',
-    'v_newtonian_baryon': 'baryon_velocity_power',
-    'v_baryon_cdm': 'baryon_cdm_relative_velocity_power',
-}
+def rebin(P, k, k_new):
+    """
+    Re-bin a matter power spectrum to new k values
+    using a separate cubic spline for each redshift
 
-@contextlib.contextmanager
-def be_quiet_camb():
-    original_feedback_level = camb.config.FeedbackLevel
-    try:
-        camb.set_feedback_level(0)
-        yield
-    finally:
-        camb.set_feedback_level(original_feedback_level)
-
-
-def get_optional_params(block, section, names):
-    params = {}
-
-    for name in names:
-        # For some parameters we just use the Camb name as the parameter
-        # name, but for other we specify a simpler one
-        if isinstance(name, (list, tuple)):
-            cosmosis_name, output_name = name
-        else:
-            cosmosis_name = name
-            output_name = name
-
-        # We don't try to set our own default for these parameters,
-        # we just let camb decide them on its own
-        if block.has_value(section, cosmosis_name):
-            params[output_name] = block[section, cosmosis_name]
-    return params
-
-def get_choice(options, name, valid, default=None, prefix=''):
-    choice = options.get_string(opt, name, default=default)
-    if choice not in valid:
-        raise ValueError("Parameter setting '{}' in camb must be one of: {}.  You tried: {}".format(name, valid, choice))
-    return prefix + choice
-
-
-def make_z_for_pk(more_config):
-    if 'zmid' in more_config:
-        z = np.concatenate((np.linspace(more_config['zmin'], 
-                                        more_config['zmid'], 
-                                        more_config['nz_mid'], 
-                                        endpoint=False),
-                            np.linspace(more_config['zmid'], 
-                                        more_config['zmax'], 
-                                        more_config['nz']-more_config['nz_mid'])))[::-1]
-    else:
-        z = np.linspace(more_config['zmin'], more_config['zmax'], more_config['nz'])[::-1]
-
-    return z
-
+    Parameters
+    ----------
+    P : array
+        The power spectrum to rebin
+    k : array
+        The original k values
+    k_new : array
+        The new k values
+    """
+    P_new = np.zeros(shape=(P.shape[0], len(k_new)))
+    for i in range(P.shape[0]):
+        P_spline = CubicSpline(k, P[i])
+        P_new[i] = P_spline(k_new)
+    return P_new
 
 def setup(options):
     mode = options.get_string(opt, 'mode', default='all')
@@ -367,123 +328,6 @@ def get_cosmopower_inputs_cls(block,):
 
     return params
 
-
-# The extract functions convert from the block to camb parameters
-# during the execute function
-
-def extract_recombination_params(block, config, more_config):
-    default_recomb = camb.recombination.Recfast()
- 
-    min_a_evolve_Tm = block.get_double('recfast', 'min_a_evolve_Tm', default=default_recomb.min_a_evolve_Tm)
-    RECFAST_fudge = block.get_double('recfast', 'RECFAST_fudge', default=default_recomb.RECFAST_fudge)
-    RECFAST_fudge_He = block.get_double('recfast', 'RECFAST_fudge_He', default=default_recomb.RECFAST_fudge_He)
-    RECFAST_Heswitch = block.get_int('recfast', 'RECFAST_Heswitch', default=default_recomb.RECFAST_Heswitch)
-    RECFAST_Hswitch = block.get_bool('recfast', 'RECFAST_Hswitch', default=default_recomb.RECFAST_Hswitch)
-    AGauss1 = block.get_double('recfast', 'AGauss1', default=default_recomb.AGauss1)
-    AGauss2 = block.get_double('recfast', 'AGauss2', default=default_recomb.AGauss2)
-    zGauss1 = block.get_double('recfast', 'zGauss1', default=default_recomb.zGauss1)
-    zGauss2 = block.get_double('recfast', 'zGauss2', default=default_recomb.zGauss2)
-    wGauss1 = block.get_double('recfast', 'wGauss1', default=default_recomb.wGauss1)
-    wGauss2 = block.get_double('recfast', 'wGauss2', default=default_recomb.wGauss2)
-    
-    recomb = camb.recombination.Recfast(
-        min_a_evolve_Tm = min_a_evolve_Tm, 
-        RECFAST_fudge = RECFAST_fudge, 
-        RECFAST_fudge_He = RECFAST_fudge_He, 
-        RECFAST_Heswitch = RECFAST_Heswitch, 
-        RECFAST_Hswitch = RECFAST_Hswitch, 
-        AGauss1 = AGauss1, 
-        AGauss2 = AGauss2, 
-        zGauss1 = zGauss1, 
-        zGauss2 = zGauss2, 
-        wGauss1 = wGauss1, 
-        wGauss2 = wGauss2, 
-    )
-
-    #Not yet supporting CosmoRec, but not too hard if needed.
-
-    return recomb
-
-def extract_reionization_params(block, config, more_config):
-    reion = camb.reionization.TanhReionization()
-    if more_config['do_reionization']:
-        if more_config['use_optical_depth']:
-            tau = block[cosmo, 'tau']
-            reion = camb.reionization.TanhReionization(use_optical_depth=True, optical_depth=tau)
-        else:
-            sec = 'reionization'
-            redshift = block[sec, 'redshift']
-            delta_redshift = block[sec, 'delta_redshift']
-            reion_params = get_optional_params(block, sec, ['fraction', 'helium_redshift', 'helium_delta_redshift', 'helium_redshiftstart'])
-            reion = camb.reionization.TanhReionization(
-                use_optical_depth=False,
-                redshift = redshift,
-                delta_redshift = delta_redshift,
-                include_helium_fullreion = include_helium_fullreion,
-                **reion_params,
-                **more_config['reionization_params'],
-            )
-    else:
-        reion = camb.reionization.TanhReionization()
-        reion.Reionization = False
-    return reion
-
-def extract_dark_energy_params(block, config, more_config):
-    if more_config['use_ppf_w']:
-        de_class = camb.dark_energy.DarkEnergyPPF
-    else:
-        de_class = camb.dark_energy.DarkEnergyFluid
-
-    dark_energy = de_class()
-    if more_config['use_tabulated_w']:
-        if block.has_value(cosmo, 'consistency_module_was_used') and block.has_value(cosmo, 'cosmomc_theta'):
-            raise RuntimeError("You used the consistency module with cosmomc_theta=T but are also"
-                               "using a tabulated w(a) in camb. The theta-H0 relation as implemeted"
-                               "in the consistency module will not work for models other than w0-wa"
-                               )
-        a = block[names.de_equation_of_state, 'a']
-        w = block[names.de_equation_of_state, 'w']
-        dark_energy.set_w_a_table(a, w)
-    else:
-        w0 = block.get_double(cosmo, 'w', default=-1.0)
-        wa = block.get_double(cosmo, 'wa', default=0.0)
-        cs2 = block.get_double(cosmo, 'cs2_de', default=1.0)
-        dark_energy.set_params(w=w0, wa=wa, cs2=cs2)
-
-    return dark_energy
-
-def extract_initial_power_params(block, config, more_config):
-    optional_param_names = ['nrun', 'nrunrun', 'nt', 'ntrun', 'r']
-    optional_params = get_optional_params(block, cosmo, optional_param_names)
-
-    init_power = camb.InitialPowerLaw()
-    init_power.set_params(
-        ns = block[cosmo, 'n_s'],
-        As = block[cosmo, 'A_s'],
-        **optional_params,
-        **more_config['initial_power_params']
-    )
-    return init_power
-
-def extract_nonlinear_params(block, config, more_config):
-    version = more_config['nonlinear_params'].get('halofit_version', '')
-
-    if version == 'mead2015' or version == 'mead2016' or version == 'mead':
-        A = block[names.halo_model_parameters, 'A']
-        eta0 = block[names.halo_model_parameters, 'eta']
-        hmcode_params = {'HMCode_A_baryon': A, 'HMCode_eta_baryon':eta0}
-    elif version == 'mead2020_feedback':
-        T_AGN = block[names.halo_model_parameters, 'logT_AGN']
-        hmcode_params = {'HMCode_logT_AGN': T_AGN}
-    else:
-        hmcode_params = {}
-
-    return camb.nonlinear.Halofit(
-        **more_config['nonlinear_params'],
-        **hmcode_params
-    )
-
-
 def extract_camb_params(block, config, more_config):
     want_perturbations = more_config['mode'] not in [MODE_BG, MODE_THERM]
     want_thermal = more_config['mode'] != MODE_BG
@@ -560,103 +404,6 @@ def extract_camb_params(block, config, more_config):
         p.set_matter_power(redshifts=z, nonlinear=config['NonLinear'] in ['NonLinear_both', 'NonLinear_pk'], **more_config['transfer_params'])
 
     return p
-
-
-def save_derived_parameters(r, block):
-    p = r.Params
-    # Write the default derived parameters to distance section
-    derived = r.get_derived_params()
-    for k, v in derived.items():
-        block[names.distances, k] = v
-    block[names.distances, 'rs_zdrag'] = block[names.distances, 'rdrag']
-    zstar = derived['zstar']
-    shift = r.angular_diameter_distance(zstar) * (1 + zstar) * (p.omegam * p.H0**2)**0.5 / C_KMS
-    block[names.distances, 'cmbshift'] = shift
-    
-    p.omegal = 1 - p.omegam - p.omk
-    p.ommh2 = p.omegam * p.h**2
-
-    for cosmosis_name, CAMB_name, scaling in [('h0'               , 'h',               1),
-                                              ('hubble'           , 'h',             100),
-                                              ('omnuh2'           , 'omnuh2',          1),
-                                              ('n_eff'            , 'N_eff',           1),
-                                              ('num_nu_massless'  , 'num_nu_massless', 1),
-                                              ('num_nu_massive'   , 'num_nu_massive',  1),
-                                              ('massive_nu'       , 'num_nu_massive',  1),
-                                              ('massless_nu'      , 'num_nu_massless', 1),
-                                              ('omega_b'          , 'omegab',          1),
-                                              ('omega_c'          , 'omegac',          1),
-                                              ('omega_nu'         , 'omeganu',         1),
-                                              ('omega_m'          , 'omegam',          1),
-                                              ('omega_lambda'     , 'omegal',          1),
-                                              ('ommh2'            , 'ommh2',           1),]:
-
-        CAMB_value = getattr(p, CAMB_name)*scaling
-
-        if block.has_value(names.cosmological_parameters, cosmosis_name):
-            input_value = block[names.cosmological_parameters, cosmosis_name]
-            if not np.isclose(input_value, CAMB_value, rtol=0.002):
-                warnings.warn(f"Parameter {cosmosis_name} inconsistent: input was {input_value} but value is now {CAMB_value}.")
-        # Either way we save the results
-        block[names.cosmological_parameters, cosmosis_name] = CAMB_value
-
-
-def save_distances(r, block, more_config):
-    p = r.Params
-
-    # Evaluate z on a different grid than the spectra, so we can easily extend it further
-    z_background = np.linspace(
-        more_config['zmin_background'], more_config['zmax_background'], more_config['nz_background'])
-
-    #If desired, append logarithmically distributed redshifts
-    log_z = np.geomspace(more_config['zmax_background'], more_config['zmax_logz'], num = more_config['n_logz'])
-    z_background = np.append(z_background, log_z[1:])
-    
-    # Write basic distances and related quantities to datablock
-    block[names.distances, 'nz'] = len(z_background)
-    block[names.distances, 'z'] = z_background
-    block[names.distances, 'a'] = 1/(z_background+1)
-
-    D_C = r.comoving_radial_distance(z_background)
-    H = r.h_of_z(z_background)
-    D_H = 1 / H[0]
-
-    if p.omk == 0:
-        D_M = D_C
-    elif p.omk < 0:
-        s = np.sqrt(-p.omk)
-        D_M = (D_H / s)  * np.sin(s * D_C / D_H)
-    else:
-        s = np.sqrt(p.omk)
-        D_M = (D_H / s) * np.sinh(s * D_C / D_H)
-
-    D_L = D_M * (1 + z_background)
-    D_A = D_M / (1 + z_background)
-    D_V = ((1 + z_background)**2 * z_background * D_A**2 / H)**(1./3.)
-
-    # Deal with mu(0), which is -np.inf
-    mu = np.zeros_like(D_L)
-    pos = D_L > 0
-    mu[pos] = 5*np.log10(D_L[pos])+25
-    mu[~pos] = -np.inf
-
-    block[names.distances, 'D_C'] = D_C
-    block[names.distances, 'D_M'] = D_M
-    block[names.distances, 'D_L'] = D_L
-    block[names.distances, 'D_A'] = D_A
-    block[names.distances, 'D_V'] = D_V
-    block[names.distances, 'H'] = H
-    block[names.distances, 'MU'] = mu
-
-    if more_config['do_bao']:
-        rs_DV, _, _, F_AP = r.get_BAO(z_background, p).T
-        block[names.distances, 'rs_DV'] = rs_DV
-        block[names.distances, 'F_AP'] = F_AP
-
-    if more_config['want_chistar']:
-        chistar = (r.conformal_time(0)- r.tau_maxvis)
-        block[names.distances, 'CHISTAR'] = chistar
-
 
 def compute_growth_factor(block, P_tot, k, z, more_config):
     P_kmin = P_tot[:,0]
