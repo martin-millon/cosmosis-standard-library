@@ -3,6 +3,8 @@ from cosmosis.datablock.cosmosis_py import errors
 import numpy as np
 import warnings
 import traceback
+import sys
+import pathlib
 import contextlib
 from scipy.interpolate import InterpolatedUnivariateSpline, RectBivariateSpline, CubicSpline, UnivariateSpline
 
@@ -526,7 +528,7 @@ def save_matter_power(r, block, config, more_config):
     #omega_m = (p.ombh2+p.omch2)/(p.H0/100)**2 # use this because p.omegam has mass of neutrinos in it.
     #block[cosmo, 'omega_m'] = omega_m
 
-def save_cls(r, block):
+def save_cls(r, block, more_config):
 
     params = get_cosmopower_inputs_cls(block)
     cmb_unit = (2.7255e6)**2 #muK
@@ -570,7 +572,7 @@ def execute(block, config):
 
     if p.WantCls:
         with be_quiet_camb():
-            save_cls(r, block)
+            save_cls(r, block, more_config)
     
     return 0
 
