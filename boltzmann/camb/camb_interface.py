@@ -88,6 +88,20 @@ def make_z_for_pk(more_config):
 
     return z
 
+def cosmopower_k():
+    ranges = [
+        (1e-5, 1e-4, 20),
+        (1e-4, 1e-3, 40),
+        (1e-3, 1e-2, 60),
+        (1e-2, 1e-1, 80),
+        (1e-1, 1, 100),
+        (1, 10, 120),
+        (10, 20, 40)
+    ]
+
+    # Generate each segment and concatenate them
+    k = np.concatenate([np.logspace(np.log10(start), np.log10(stop), num=num, endpoint=False) for start, stop, num in ranges])
+    return k
 
 def setup(options):
     mode = options.get_string(opt, 'mode', default="all")
@@ -169,7 +183,7 @@ def setup(options):
     more_config['zmax'] = options.get_double(opt, 'zmax', default=3.01)
     more_config['nz'] = options.get_int(opt, 'nz', default=150)
     more_config.update(get_optional_params(options, opt, ["zmid", "nz_mid"]))
-    more_config['redshift_as_parameter'] = options.get_bool(opt, 'redshift_as_parameter', default=True)
+    more_config['redshift_as_parameter'] = options.get_bool(opt, 'redshift_as_parameter', default=False)
 
     more_config['zmin_background'] = options.get_double(opt, 'zmin_background', default=more_config['zmin'])
     more_config['zmax_background'] = options.get_double(opt, 'zmax_background', default=more_config['zmax'])
@@ -185,6 +199,7 @@ def setup(options):
     more_config['kmax'] = options.get_double(opt, "kmax", more_config["transfer_params"]["kmax"])
     more_config['kmax_extrapolate'] = options.get_double(opt, "kmax_extrapolate", default=more_config['kmax'])
     more_config['nk'] = options.get_int(opt, "nk", default=200)
+    more_config['cosmopower_k'] = options.get_bool(opt, 'use_cosmopower_kvec', default=False)
 
     more_config['power_spectra'] = options.get_string(opt, "power_spectra", default="delta_tot").split()
     bad_power = []
@@ -568,6 +583,8 @@ def save_matter_power(r, block, more_config):
         )
         assert P.islog
         k = np.logspace(np.log10(kcalc[0]), np.log10(kmax_power), more_config['nk'])
+        if more_config['cosmopower_k']:
+            k = cosmopower_k()
 
         # P.P evaluates at k instead of logk
         p_k = P.P(z, k, grid=True)
