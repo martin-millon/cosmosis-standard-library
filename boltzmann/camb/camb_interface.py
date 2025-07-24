@@ -169,6 +169,7 @@ def setup(options):
     more_config['zmax'] = options.get_double(opt, 'zmax', default=3.01)
     more_config['nz'] = options.get_int(opt, 'nz', default=150)
     more_config.update(get_optional_params(options, opt, ["zmid", "nz_mid"]))
+    more_config['redshift_as_parameter'] = options.get_bool(opt, 'redshift_as_parameter', default=True)
 
     more_config['zmin_background'] = options.get_double(opt, 'zmin_background', default=more_config['zmin'])
     more_config['zmax_background'] = options.get_double(opt, 'zmax_background', default=more_config['zmax'])
@@ -536,7 +537,7 @@ def compute_growth_factor(r, block, P_tot, k, z, more_config):
     P_kmin = P_tot.P(z, kmin)
 
     D = np.sqrt(P_kmin / P_kmin[0]).squeeze()
-    return D
+    return np.atleast_1d(D)
 
 
 def save_matter_power(r, block, more_config):
@@ -547,6 +548,10 @@ def save_matter_power(r, block, more_config):
     # of these
     kmax_power = max(more_config['kmax'], more_config['kmax_extrapolate'])
     z = make_z_for_pk(more_config)[::-1]
+    if more_config['redshift_as_parameter']:
+        if not block.has_value(cosmo, 'z'):
+            raise ValueError("If you want to use the redshift as a parameter, you need to specify it in your values file.")
+        z = np.atleast_1d(block[cosmo, 'z'])
 
     P_tot = None
 
