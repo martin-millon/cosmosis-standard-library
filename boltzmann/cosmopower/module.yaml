@@ -3,9 +3,9 @@ version: 1.0
 purpose: Boltzmann and background integrator for BG, CMB, and matter power
 url: cosmopower_url
 interface: cosmopower_interface.py
-attribution: ...
+attribution: "Andrej Dvornik, Pierre Burger, Naomi Robertson, Joe Zuntz"
 rules: 
-cite:
+cite: ""
 -   
 -   
 

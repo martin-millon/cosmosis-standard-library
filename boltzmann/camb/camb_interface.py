@@ -564,9 +564,7 @@ def save_matter_power(r, block, more_config):
     kmax_power = max(more_config['kmax'], more_config['kmax_extrapolate'])
     z = make_z_for_pk(more_config)[::-1]
     if more_config['redshift_as_parameter']:
-        if not block.has_value(cosmo, 'z'):
-            raise ValueError("If you want to use the redshift as a parameter, you need to specify it in your values file.")
-        z = np.atleast_1d(block[cosmo, 'z'])
+        z = np.atleast_1d(block['redshift_as_parameter', 'z'])
 
     P_tot = None
 

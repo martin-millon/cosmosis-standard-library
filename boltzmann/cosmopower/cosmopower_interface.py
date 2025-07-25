@@ -5,7 +5,7 @@ import warnings
 import traceback
 import sys
 import pathlib
-import contextlib
+import pickle
 from scipy.interpolate import InterpolatedUnivariateSpline, RectBivariateSpline, CubicSpline, UnivariateSpline
 
 # Finally we can now import camb
@@ -13,9 +13,9 @@ import camb
 
 # Get the camb functions from the camb_interface module.
 # Should really put this somewhere else!
-camb_dir = pathlib.Path(__file__).parent.resolve() / "camb"
+camb_dir = pathlib.Path(__file__).parent.parent.resolve() / "camb"
 sys.path.append(str(camb_dir))
-from camb_interface import matter_power_section_names, be_quiet_camb, get_optional_params, get_choice, make_z_for_pk, extract_recombination_params, extract_reionization_params, extract_dark_energy_params, extract_initial_power_params, extract_nonlinear_params, save_derived_parameters, save_distances
+from camb_interface import be_quiet_camb, get_optional_params, get_choice, make_z_for_pk, extract_recombination_params, extract_reionization_params, extract_dark_energy_params, extract_initial_power_params, extract_nonlinear_params, save_derived_parameters, save_distances
 
 # TODO: maybe we import camb background calculations from camb_interface, so it is eaiser to update things?
 
@@ -37,6 +37,25 @@ DEFAULT_A_S = 2.1e-9
 
 C_KMS = 299792.458
 
+# See this table for description:
+#https://camb.readthedocs.io/en/latest/transfer_variables.html#transfer-variables
+matter_power_section_names = {
+    #'delta_cdm': 'dark_matter_power',
+    #'delta_baryon': 'baryon_power',
+    #'delta_photon': 'photon_power',
+    #'delta_neutrino': 'massless_neutrino_power',
+    #'delta_nu': 'massive_neutrino_power',
+    'delta_tot': 'matter_power',
+    #'delta_nonu': 'cdm_baryon_power',
+    #'delta_tot_de': 'matter_de_power',
+    #'weyl': 'weyl_curvature_power',
+    #'v_newtonian_cdm': 'cdm_velocity_power',
+    #'v_newtonian_baryon': 'baryon_velocity_power',
+    #'v_baryon_cdm': 'baryon_cdm_relative_velocity_power',
+}
+
+camb_section_names = ['cosmological_parameters', 'halo_model_parameters', 'recfast', 'reionization', 'de_equation_of_state']
+
 def rebin(P, k, k_new):
     """
     Re-bin a matter power spectrum to new k values
@@ -56,6 +75,46 @@ def rebin(P, k, k_new):
         P_spline = CubicSpline(k, P[i])
         P_new[i] = P_spline(k_new)
     return P_new
+
+def get_predictions(params, network, reference, k_rebin):
+    k = network.modes
+
+    # Get the prediction, and convert to physical values
+    P = network.predictions_np(params)
+    for i in range(P.shape[0]):
+        P[i] = P[i] + reference 
+    P = 10 ** P
+
+    # If necessary, rebin the power spectrum to the requested k values
+    if k_rebin is not None:
+        P = rebin(P, k, k_rebin)
+        k = k_rebin
+
+    return k, P
+
+def test_params(block, params, fixed_params, z, limits):
+    # Check that all the parameters are in the required ranges
+    for param in params:
+        pmin, pmax = limits[param]
+        if params[param] < pmin or params[param] > pmax:
+            raise ValueError(
+                f"Cosmopower: {param} out of range: {params[param]} not in [{pmin}, {pmax}]"
+            )
+
+    # The redshifts must also be in the required range.
+    zmin, zmax = limits["z"]
+    if z[0] < zmin or z[-1] > zmax:
+        raise ValueError(
+            f"Redshifts out of range: {z[0]} to {z[-1]} not in [{zmin}, {zmax}]"
+        )
+
+    # These parameters were fixed during the training of the emulator,
+    # so we check they are the same here
+    for name, val in fixed_params.items():
+        if block[cosmo, name] != val:
+            raise ValueError(f"Parameter {name} must be fixed at {val}")
+        
+    return params
 
 def setup(options):
     mode = options.get_string(opt, 'mode', default='all')
@@ -141,41 +200,19 @@ def setup(options):
     more_config['zmin_background'] = options.get_double(opt, 'zmin_background', default=more_config['zmin'])
     more_config['zmax_background'] = options.get_double(opt, 'zmax_background', default=more_config['zmax'])
     more_config['nz_background'] = options.get_int(opt, 'nz_background', default=more_config['nz'])
+    more_config.update(get_optional_params(options, opt, ["zmid", "nz_mid"]))
+    more_config['redshift_as_parameter'] = options.get_bool(opt, 'redshift_as_parameter', default=False)
 
     more_config['transfer_params'] = get_optional_params(options, opt, ['k_per_logint', 'accurate_massive_neutrino_transfers'])
     # Adjust CAMB defaults
     more_config['transfer_params']['kmax'] = options.get_double(opt, 'kmax', default=10.0)
     # more_config['transfer_params']['high_precision'] = options.get_bool(opt, 'high_precision', default=True)
 
-    more_config['kmin'] = options.get_double(opt, 'kmin', default=1e-5)
-    more_config['kmax'] = options.get_double(opt, 'kmax', more_config['transfer_params']['kmax'])
-    more_config['kmax_extrapolate'] = options.get_double(opt, 'kmax_extrapolate', default=more_config['kmax'])
-    more_config['nk'] = options.get_int(opt, 'nk', default=200)
-    more_config['use_specific_k_modes'] = options.get_bool(opt, 'use_specific_k_modes', default=False)
-    more_config['sample_S8'] = options.get_bool(opt, 'sample_S8', default=True)
-    
-    # Create the object that connects to cosmopower
-    # load pre-trained NN model: maps cosmological parameters to linear log-P(k)
-    if config['WantTransfer']:
-        more_config['lin_matter_power_cp'] = cp.cosmopower_NN(restore=True, restore_filename=options.get_string(opt, 'lin_matter_power_emulator'))
-        more_config['nonlin_matter_power_cp'] = cp.cosmopower_NN(restore=True, restore_filename=options.get_string(opt, 'nonlin_matter_power_emulator')) if config['NonLinear'] != 'NonLinear_none' else None
-
-        if halofit_version == 'mead2020_feedback':
-            more_config['reference_linear_spectra'] = np.log10(np.load(options.get_string(opt, 'reference_linear_spectra'))['features'])
-            more_config['reference_nonlinear_spectra'] = np.log10(np.load(options.get_string(opt, 'reference_nonlinear_spectra'))['features']) if config['NonLinear'] != 'NonLinear_none' else None
-            more_config['As_emulator'] = cp.cosmopower_NN(restore=True, restore_filename=options.get_string(opt, 'As_emulator')) if options.has_value(opt, 'As_emulator') else None
-        else:
-            more_config['reference_linear_spectra'] = None
-            more_config['reference_nonlinear_spectra'] = None
-            more_config['As_emulator'] = None
-                            
-                            
-    # CosmoPower cls
-    if config['WantCls']:
-        more_config['TT'] = cp.cosmopower_NN(restore=True, restore_filename=options.get_string(opt, 'TT_emulator'))
-        more_config['TE'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename=options.get_string(opt, 'TE_emulator'))
-        more_config['EE'] = cp.cosmopower_NN(restore=True, restore_filename=options.get_string(opt, 'EE_emulator'))
-        more_config['PP'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename=options.get_string(opt, 'PP_emulator'))
+    more_config['kmin'] = options.get_double(opt, "kmin", 1e-6)
+    more_config['kmax'] = options.get_double(opt, "kmax", more_config["transfer_params"]["kmax"])
+    more_config['kmax_extrapolate'] = options.get_double(opt, "kmax_extrapolate", default=more_config['kmax'])
+    more_config['nk'] = options.get_int(opt, "nk", default=200)
+    more_config['cosmopower_k'] = options.get_bool(opt, 'use_cosmopower_kvec', default=False)
 
     more_config['power_spectra'] = options.get_string(opt, 'power_spectra', default='delta_tot').split()
     bad_power = []
@@ -185,150 +222,35 @@ def setup(options):
     if bad_power:
         bad_power = ", ".join(bad_power)
         good_power = ", ".join(matter_power_section_names.keys())
-        raise ValueError("""These matter power types are not known: {}.
+        raise ValueError("""These matter power types are currently not implemented with the CosmoPower: {}.
             Please use any these (separated by spaces): {}""".format(bad_power, good_power))
+
+    cosmopower_root_filename = options.get_string(opt, 'cosmopower_root_filename', default='')
+    more_config['fixed_params'] = pickle.load(open(f'{cosmopower_root_filename}_fixed_params.pkl', 'rb'))
+    more_config['limits'] = pickle.load(open(f'{cosmopower_root_filename}_param_limits.pkl', 'rb'))
+    # Create the object that connects to cosmopower
+    # load pre-trained NN model: maps cosmological parameters to linear log-P(k)
+    if config['WantTransfer']:
+        more_config['matter_power_lin_cp'] = cp.cosmopower_NN(restore=True, restore_filename=f'{cosmopower_root_filename}_matter_power_lin')
+        more_config['matter_power_nl_cp'] = cp.cosmopower_NN(restore=True, restore_filename=f'{cosmopower_root_filename}_matter_power_nl') if config['NonLinear'] != 'NonLinear_none' else None
+        more_config['reference_matter_power_lin_cp'] = np.log10(pickle.load(open(f'{cosmopower_root_filename}_matter_power_lin_reference.pkl', 'rb')))
+        more_config['reference_matter_power_nl_cp'] = np.log10(pickle.load(open(f'{cosmopower_root_filename}_matter_power_nl_reference.pkl', 'rb'))) if config['NonLinear'] != 'NonLinear_none' else None
+                            
+    # CosmoPower cls
+    if config['WantCls']:
+        raise NotImplementedError
+        #more_config['TT_cp'] = cp.cosmopower_NN(restore=True, restore_filename='')
+        #more_config['TE_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename='')
+        #more_config['EE_cp'] = cp.cosmopower_NN(restore=True, restore_filename='')
+        #more_config['BB_cp'] = cp.cosmopower_NN(restore=True, restore_filename='')
+        #if config['DoLensing']:
+        #    more_config['PP_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename='')
+        #    more_config['PT_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename='')
+        #    more_config['PE_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename='')
 
     camb.set_feedback_level(level=options.get_int(opt, 'feedback', default=0))
     return [config, more_config]
 
-
-def get_cosmopower_inputs(block, z, nz, config, more_config):
-    version = more_config['nonlinear_params'].get('halofit_version', '')
-
-    def check_range(value, min_val, max_val, name):
-        if value < min_val or value > max_val:
-            raise Exception(f"{name} value outside training range {value}")
-
-    # Check cosmological parameters
-    check_range(block[cosmo, 'mnu'], 0.06, 0.06, "mnu")
-    check_range(block[cosmo, 'omega_k'], 0.0, 0.0, "omega_k")
-    check_range(block[cosmo, 'w'], -1.0, -1.0, "w")
-    check_range(block[cosmo, 'wa'], 0.0, 0.0, "wa")
-    check_range(block[cosmo, 'n_s'], 0.84, 1.1, "n_s")
-    check_range(block[cosmo, 'h0'], 0.64, 0.82, "h0")
-    check_range(block[cosmo, 'ombh2'], 0.019, 0.026, "ombh2")
-    check_range(block[cosmo, 'omch2'], 0.051, 0.255, "omch2")
-    check_range(z[-1], 0, 6.0, "z")
-    check_range(z[0], 0, 6.0,  "z")
-
-    params_lin = params_nonlin = params_boost = None
-
-    if version == 'mead2015':
-        if config['NonLinear'] != 'NonLinear_none':
-            check_range(block[cosmo, 'A'], 2, 4, "A")
-            check_range(block[cosmo, 'eta'], 0.5, 1.0, "eta")
-
-        if not more_config['sample_S8']:
-            check_range(np.log(block[cosmo, 'A_s'] * 10**10), 1.61, 3.91, "A_s")
-            params_lin = {
-                'ln10^{10}A_s': [np.log(block[cosmo, 'A_s'] * 10**10)] * nz,
-                'n_s': [block[cosmo, 'n_s']] * nz,
-                'h': [block[cosmo, 'h0']] * nz,
-                'omega_b': [block[cosmo, 'ombh2']] * nz,
-                'omega_cdm': [block[cosmo, 'omch2']] * nz,
-                'z': z
-            }
-            if config['NonLinear'] != 'NonLinear_none':
-                params_boost = {
-                    'ln10^{10}A_s': [np.log(block[cosmo, 'A_s'] * 10**10)] * nz,
-                    'n_s': [block[cosmo, 'n_s']] * nz,
-                    'h': [block[cosmo, 'h0']] * nz,
-                    'omega_b': [block[cosmo, 'ombh2']] * nz,
-                    'omega_cdm': [block[cosmo, 'omch2']] * nz,
-                    'z': z,
-                    'c_min': [block.get_double(names.halo_model_parameters, 'A')] * nz,
-                    'eta_0': [block.get_double(names.halo_model_parameters, 'eta')] * nz
-                }
-
-        elif more_config['sample_S8']:
-            check_range(block[cosmo, 's_8_input'], 0.5, 1.0, "S_8_input")
-            params_lin = {
-                'S_8': [block[cosmo, 's_8_input']] * nz,
-                'n_s': [block[cosmo, 'n_s']] * nz,
-                'h': [block[cosmo, 'h0']] * nz,
-                'omega_b': [block[cosmo, 'ombh2']] * nz,
-                'omega_cdm': [block[cosmo, 'omch2']] * nz,
-                'z': z,
-                'c_min': [block.get_double(names.halo_model_parameters, 'A')] * nz,
-                'eta_0': [block.get_double(names.halo_model_parameters, 'eta')] * nz
-            }
-            if config['NonLinear'] != 'NonLinear_none':
-                params_boost = {
-                    'S_8': [block[cosmo, 'S_8_input']] * nz,
-                    'n_s': [block[cosmo, 'n_s']] * nz,
-                    'h': [block[cosmo, 'h0']] * nz,
-                    'omega_b': [block[cosmo, 'ombh2']] * nz,
-                    'omega_cdm': [block[cosmo, 'omch2']] * nz,
-                    'z': z,
-                    'c_min': [block.get_double(names.halo_model_parameters, 'A')] * nz,
-                    'eta_0': [block.get_double(names.halo_model_parameters, 'eta')] * nz
-                }
-
-    elif version == 'mead2020_feedback':
-        if more_config['sample_S8']:
-            check_range(block[cosmo, 's_8_input'], 0.5, 1.0, "S_8_input")
-            if config['NonLinear'] != 'NonLinear_none':
-                check_range(block.get_double(names.halo_model_parameters, 'logT_AGN'), 7.3, 8.3, "logT_AGN")
-            params_lin = {
-                'S8': [block[cosmo, 's_8_input']] * nz,
-                'n_s': [block[cosmo, 'n_s']] * nz,
-                'h': [block[cosmo, 'h0']] * nz,
-                'obh2': [block[cosmo, 'ombh2']] * nz,
-                'omch2': [block[cosmo, 'omch2']] * nz,
-                'z': z
-            }
-            if config['NonLinear'] != 'NonLinear_none':
-                params_nonlin = {
-                    'S8': [block[cosmo, 's_8_input']] * nz,
-                    'n_s': [block[cosmo, 'n_s']] * nz,
-                    'h': [block[cosmo, 'h0']] * nz,
-                    'obh2': [block[cosmo, 'ombh2']] * nz,
-                    'omch2': [block[cosmo, 'omch2']] * nz,
-                    'z': z,
-                    'log_T_AGN': [block.get_double(names.halo_model_parameters, 'logT_AGN')] * nz
-                }
-
-        elif not more_config['sample_S8']:
-            check_range(block[cosmo, 'sigma_8'], 0.39, 1.01, "sigma_8")
-            if config['NonLinear'] != 'NonLinear_none':
-                check_range(block.get_double(names.halo_model_parameters, 'logT_AGN'), 6.5, 9.36, "logT_AGN")
-            params_lin = {
-                'sigma8': [block[cosmo, 'sigma_8']] * nz,
-                'n_s': [block[cosmo, 'n_s']] * nz,
-                'h': [block[cosmo, 'h0']] * nz,
-                'obh2': [block[cosmo, 'ombh2']] * nz,
-                'omch2': [block[cosmo, 'omch2']] * nz,
-                'z': z
-            }
-            if config['NonLinear'] != 'NonLinear_none':
-                params_nonlin = {
-                    'sigma8': [block[cosmo, 'sigma_8']] * nz,
-                    'n_s': [block[cosmo, 'n_s']] * nz,
-                    'h': [block[cosmo, 'h0']] * nz,
-                    'obh2': [block[cosmo, 'ombh2']] * nz,
-                    'omch2': [block[cosmo, 'omch2']] * nz,
-                    'z': z,
-                    'log_T_AGN': [block.get_double(names.halo_model_parameters, 'logT_AGN')] * nz
-                }
-
-    return params_lin, params_nonlin, params_boost
-
-
-def get_cosmopower_inputs_cls(block,):
-    
-    # Get parameters from block and give them the
-    # names and form that cosmopower expects
-    params = {
-        'omega_b':  [block[cosmo, 'ombh2']],
-        'omega_cdm': [block[cosmo, 'omch2']],
-        'h':         [block[cosmo, 'h0']],
-        'tau_reio':   [block[cosmo, 'tau']],
-        'n_s': [block[cosmo, 'n_s']],
-        'ln10^{10}A_s': [block[cosmo, 'A_s']]
-    }
-    # Note: the p(k) emulator writes ln10^{10}A_s to the datablock as 'A_s'. Wonderful naming convention!
-
-    return params
 
 def extract_camb_params(block, config, more_config):
     want_perturbations = more_config['mode'] not in [MODE_BG, MODE_THERM]
@@ -437,76 +359,44 @@ def save_matter_power(r, block, config, more_config):
     z = make_z_for_pk(more_config)[::-1]
     nz = len(z)
 
-    h0 = block[cosmo, 'h0']
-    # Use k modes for cosmopower
-    k = more_config['lin_matter_power_cp'].modes
-    nk = len(k)
+    # We will need this when we implement all power spectra options from CAMB:
+    #for transfer_type in more_config['power_spectra']:
+    #    # Deal with case consistency in Weyl option
+    #    tt = transfer_type if transfer_type != 'weyl' else 'Weyl'
 
-    params_lin, params_nonlin, params_boost = get_cosmopower_inputs(block, z, nz, config, more_config)
+    params = {}
+    for param in more_config['matter_power_lin_cp'].parameters:
+        for name in camb_section_names:
+            if block.has_value(name, param):
+                params[param] = [block.get(name, param)]
+    # We need to replace the redshift value for the redshift array
+    if not more_config['redshift_as_parameter']:
+        # The cosmopower interface expects an array of parameter values for each redshift
+        # that we are emulating, even when the parameters are all the same
+        params = {par: np.full(z.size, v) for par,v in params.items()}
+        params['z'] = z
 
-    if more_config['reference_linear_spectra'] is None:
-        P_lin = more_config['lin_matter_power_cp'].ten_to_predictions_np(params_lin)
-        if config['NonLinear'] != 'NonLinear_none':
-            P_nl = (P_lin * more_config['nonlin_matter_power_cp'].ten_to_predictions_np(params_boost)
-                    if params_boost is not None else
-                    more_config['nonlin_matter_power_cp'].ten_to_predictions_np(params_nonlin))
-    else:
-        if more_config['As_emulator'] is not None:
-            block[names.cosmological_parameters, 'A_s'] = more_config['As_emulator'].predictions_np(params_nonlin)[0][0]
+    k_rebin = None
+    if not more_config['cosmopower_k']:
+        k_rebin = np.logspace(np.log10(more_config['kmin']), np.log10(kmax_power), more_config['nk'])
+    
+    k, P_lin = get_predictions(params, more_config['matter_power_lin_cp'], more_config['reference_matter_power_lin_cp'], k_rebin)
 
-        P_lin = more_config['lin_matter_power_cp'].predictions_np(params_lin)
-        if config['NonLinear'] != 'NonLinear_none':
-            P_nl = more_config['nonlin_matter_power_cp'].predictions_np(params_nonlin)
-
-        # Subtract the reference spectra
-        for i in range(P_lin.shape[0]):
-            P_lin[i] += more_config['reference_linear_spectra']
-            if config['NonLinear'] != 'NonLinear_none':
-                P_nl[i] += more_config['reference_nonlinear_spectra']
-
-        P_lin = 10**P_lin
-        if config['NonLinear'] != 'NonLinear_none':
-            P_nl = 10**P_nl
-
-    k = k / h0
-    P_lin = P_lin * h0**3.0
+    # Save matter power as a grid
+    block.put_grid('matter_power_lin', 'z', z, 'k_h', k, 'p_k', P_lin)
     if config['NonLinear'] != 'NonLinear_none':
-        P_nl = P_nl * h0**3.0
+        k, P_nl = get_predictions(params, more_config['matter_power_nl_cp'], more_config['reference_matter_power_nl_cp'], k_rebin)
+        block.put_grid('matter_power_nl', 'z', z, 'k_h', k, 'p_k', P_nl)
 
-    primordial_PK = p.scalar_power(k * h0)
+
+    primordial_PK = p.scalar_power(k * block[names.cosmological_parameters, 'h0'])
     transfer = np.sqrt(P_lin[0, :] / (primordial_PK * k * 2.0 * np.pi**2.0))
     # Assumes we have P_lin at z=0!
     # matter_power = primordial_PK * transfer**2 * k**4 / (k**3 / (2 * np.pi**2))
     block.put_double_array_1d('matter_power_transfer_func', 'k_h', k)
     block.put_double_array_1d('matter_power_transfer_func', 't_k', transfer)
 
-    if more_config['use_specific_k_modes']:
-        k_new = np.logspace(np.log10(more_config['kmin']), np.log10(kmax_power), num=more_config['nk'])
-        P_lin_new = np.zeros(shape=(nz, len(k_new)))
-        if config['NonLinear'] != 'NonLinear_none':
-            P_nl_new = np.zeros(shape=(nz, len(k_new)))
-
-        for i in range(nz):
-            P_lin_spline = InterpolatedUnivariateSpline(k, P_lin[i], ext=0)
-            P_lin_new[i] = P_lin_spline(k_new)
-            if config['NonLinear'] != 'NonLinear_none':
-                P_nl_spline = InterpolatedUnivariateSpline(k, P_nl[i], ext=0)
-                P_nl_new[i] = P_nl_spline(k_new)
-
-        P_lin = P_lin_new
-        if config['NonLinear'] != 'NonLinear_none':
-            P_nl = P_nl_new
-        k = k_new
-
-    # Save matter power as a grid
-    block.put_grid('matter_power_lin', 'z', z, 'k_h', k, 'p_k', P_lin)
-    if config['NonLinear'] != 'NonLinear_none':
-        block.put_grid('matter_power_nl', 'z', z, 'k_h', k, 'p_k', P_nl)
-
     # Get growth rates and sigma_8
-    sigma_sq_cs = CubicSpline(k, k**2 * window(k)**2 * P_lin[0] / (2 * np.pi**2))
-    sigma_8 = np.sqrt(sigma_sq_cs.integrate(k.min(), k.max()))
-
     rs_DV, H, DA, F_AP = r.get_BAO(z, p).T
     D, f = compute_growth_factor(block, P_lin, k, z, more_config)
 
@@ -522,11 +412,14 @@ def save_matter_power(r, block, config, more_config):
     block[names.growth_parameters, 'd_z'] = D
     block[names.growth_parameters, 'f_z'] = f
 
-    block[names.cosmological_parameters, 'sigma_8'] = sigma_8
-    block[names.cosmological_parameters, 'S_8'] = sigma_8 * np.sqrt(p.omegam / 0.3)
+    if not block.has_value(names.cosmological_parameters, 'sigma_8'):
+        sigma_sq_cs = CubicSpline(k, k**2 * window(k)**2 * P_lin[0] / (2 * np.pi**2))
+        sigma_8 = np.sqrt(sigma_sq_cs.integrate(k.min(), k.max()))
+        block[names.cosmological_parameters, 'sigma_8'] = sigma_8
+        block[names.cosmological_parameters, 'S_8'] = sigma_8 * np.sqrt(p.omegam / 0.3)
+    else:
+        block[names.cosmological_parameters, 'S_8'] = block[names.cosmological_parameters, 'sigma_8'] * np.sqrt(p.omegam / 0.3)
 
-    #omega_m = (p.ombh2+p.omch2)/(p.H0/100)**2 # use this because p.omegam has mass of neutrinos in it.
-    #block[cosmo, 'omega_m'] = omega_m
 
 def save_cls(r, block, more_config):
 
