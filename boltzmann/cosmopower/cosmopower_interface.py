@@ -109,15 +109,44 @@ def set_params(block, params_in, fixed_params, limits, z):
         
     return params
 
+def set_params_cls(block):
+    # Get parameters from block and give them the
+    # names and form that cosmopower expects
+    params = {
+        'omega_b': [block[cosmo, 'ombh2']],
+        'omega_cdm': [block[cosmo, 'omch2']],
+        'h': [block[cosmo, 'h0']],
+        'tau_reio': [block[cosmo, 'tau']],
+        'n_s': [block[cosmo, 'n_s']],
+        'ln10^{10}A_s': [block[cosmo, 'A_s']]
+    }
+    # Note: the p(k) emulator writes ln10^{10}A_s to the datablock as 'A_s'. Wonderful naming convention!
+    limits  = {
+        'omega_b': [0.005, 0.04],
+        'omega_cdm': [0.001, 0.99],
+        'h': [0.2, 1.0],
+        'tau_reio': [0.01, 0.8],
+        'n_s': [0.7, 1.3],
+        'ln10^{10}A_s': [1.61, 5]
+    }
+    for param in params:
+        pmin, pmax = limits[param]
+        if params[param][0] < pmin or params[param][0] > pmax:
+            raise ValueError(
+                f"Cosmopower: {param} out of range: {params[param][0]} not in [{pmin}, {pmax}]"
+            )
+    # We have no idea what the fixed parameters were in training the CMB spectra, we hope for the best!
+    return params
+
 def setup(options):
     config, more_config = setup_camb(options)
 
     # Cosmopower specific settings!
-    more_config['cosmopower_k'] = options.get_bool(opt, 'use_cosmopower_kvec', default=False)
     cosmopower_root_filename = options.get_string(opt, 'cosmopower_folder', default='')
-    more_config['fixed_params'] = pickle.load(open(f'{cosmopower_root_filename}/cosmopower_emulator_fixed_params.pkl', 'rb'))
-    more_config['limits'] = pickle.load(open(f'{cosmopower_root_filename}/cosmopower_emulator_param_limits.pkl', 'rb'))
     if config['WantTransfer']:
+        more_config['cosmopower_k'] = options.get_bool(opt, 'use_cosmopower_kvec', default=False)
+        more_config['fixed_params'] = pickle.load(open(f'{cosmopower_root_filename}/cosmopower_emulator_fixed_params.pkl', 'rb'))
+        more_config['limits'] = pickle.load(open(f'{cosmopower_root_filename}/cosmopower_emulator_param_limits.pkl', 'rb'))
         # We require delta_tot case to be present in order to get the growth parameters!
         if 'delta_tot' not in more_config['power_spectra']:
             raise ValueError("We require 'delta_tot' to be present in 'power_spectra'. Rerun the training with this option enabled in CAMB!")
@@ -129,15 +158,10 @@ def setup(options):
                             
     # CosmoPower cls
     if config['WantCls']:
-        raise NotImplementedError
-        #more_config['TT_cp'] = cp.cosmopower_NN(restore=True, restore_filename='')
-        #more_config['TE_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename='')
-        #more_config['EE_cp'] = cp.cosmopower_NN(restore=True, restore_filename='')
-        #more_config['BB_cp'] = cp.cosmopower_NN(restore=True, restore_filename='')
-        #if config['DoLensing']:
-        #    more_config['PP_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename='')
-        #    more_config['PT_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename='')
-        #    more_config['PE_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename='')
+        more_config['TT_cp'] = cp.cosmopower_NN(restore=True, restore_filename=f'{cosmopower_root_filename}/cmb_TT_NN')
+        more_config['TE_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename=f'{cosmopower_root_filename}/cmb_TE_PCAplusNN')
+        more_config['EE_cp'] = cp.cosmopower_NN(restore=True, restore_filename=f'{cosmopower_root_filename}/cmb_EE_NN')
+        more_config['PP_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename=f'{cosmopower_root_filename}/cmb_PP_PCAplusNN')
 
     return [config, more_config]
 
@@ -231,14 +255,14 @@ def save_matter_power(r, block, config, more_config):
 
 
 def save_cls(r, block, more_config):
-
-    params = get_cosmopower_inputs_cls(block)
+    # For now this only uses the pre-trained models from Spurio Mancini et al. 2021!
+    params = set_params_cls(block)
     cmb_unit = (2.7255e6)**2 #muK
-    tt_spectra = more_config['TT'].ten_to_predictions_np(params) * cmb_unit
-    te_spectra = more_config['TE'].predictions_np(params) * cmb_unit
-    ee_spectra = more_config['EE'].ten_to_predictions_np(params) * cmb_unit
-    pp_spectra = more_config['PP'].ten_to_predictions_np(params)
-    ell = more_config['TT'].modes
+    tt_spectra = more_config['TT_cp'].ten_to_predictions_np(params) * cmb_unit
+    te_spectra = more_config['TE_cp'].predictions_np(params) * cmb_unit
+    ee_spectra = more_config['EE_cp'].ten_to_predictions_np(params) * cmb_unit
+    pp_spectra = more_config['PP_cp'].ten_to_predictions_np(params)
+    ell = more_config['TT_cp'].modes
     # Planck likelihood requires (ell*(ell+1))/(2*pi) C_ell
     block[names.cmb_cl, 'TT'] = tt_spectra[0]*(ell*(ell+1))/(2*np.pi)
     block[names.cmb_cl, 'TE'] = te_spectra[0]*(ell*(ell+1))/(2*np.pi)
