@@ -183,7 +183,6 @@ def setup(options):
     more_config['zmax'] = options.get_double(opt, 'zmax', default=3.01)
     more_config['nz'] = options.get_int(opt, 'nz', default=150)
     more_config.update(get_optional_params(options, opt, ["zmid", "nz_mid"]))
-    more_config['redshift_as_parameter'] = options.get_bool(opt, 'redshift_as_parameter', default=False)
 
     more_config['zmin_background'] = options.get_double(opt, 'zmin_background', default=more_config['zmin'])
     more_config['zmax_background'] = options.get_double(opt, 'zmax_background', default=more_config['zmax'])
@@ -199,7 +198,6 @@ def setup(options):
     more_config['kmax'] = options.get_double(opt, "kmax", more_config["transfer_params"]["kmax"])
     more_config['kmax_extrapolate'] = options.get_double(opt, "kmax_extrapolate", default=more_config['kmax'])
     more_config['nk'] = options.get_int(opt, "nk", default=200)
-    more_config['cosmopower_k'] = options.get_bool(opt, 'use_cosmopower_kvec', default=False)
 
     more_config['power_spectra'] = options.get_string(opt, "power_spectra", default="delta_tot").split()
     bad_power = []
@@ -563,7 +561,7 @@ def save_matter_power(r, block, more_config):
     # of these
     kmax_power = max(more_config['kmax'], more_config['kmax_extrapolate'])
     z = make_z_for_pk(more_config)[::-1]
-    if more_config['redshift_as_parameter']:
+    if block.has_value('redshift_as_parameter', 'z'):
         z = np.atleast_1d(block['redshift_as_parameter', 'z'])
 
     P_tot = None
@@ -581,7 +579,7 @@ def save_matter_power(r, block, more_config):
         )
         assert P.islog
         k = np.logspace(np.log10(kcalc[0]), np.log10(kmax_power), more_config['nk'])
-        if more_config['cosmopower_k']:
+        if block.has_value('redshift_as_parameter', 'z'):
             k = cosmopower_k()
 
         # P.P evaluates at k instead of logk
