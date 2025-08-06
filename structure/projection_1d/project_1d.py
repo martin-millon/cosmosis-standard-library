@@ -92,7 +92,7 @@ def setup(options):
     config['input_section_name'] = input_section_name
 
     if suffix.startswith("{") and suffix.endswith("}"):
-        suffix_range = suffix[2:-1].split("-")
+        suffix_range = suffix[1:-1].split("-")
         config['suffixes'] = [f"_{x}" for x in range(int(suffix_range[0]), int(suffix_range[1])+1)]
     else:
         config['suffixes'] = [f"_{suffix}"]
