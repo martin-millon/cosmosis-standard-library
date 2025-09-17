@@ -1,4 +1,3 @@
-#This is a template for module description files
 name: "act_dr6_lite"
 version: "1.0.1"
 purpose: "Foreground-marginalised primary CMB (CMB-only) from ACT DR6 data."
@@ -30,7 +29,7 @@ explanation: |
     The required data can be downloaded with the provided shell script."
 
 # List of parameters that can go in the params.ini file in the section for this module    
-params:
+params: {}
 
 
 #Inputs for a given choice of a parameter, from the values.ini or from other modules

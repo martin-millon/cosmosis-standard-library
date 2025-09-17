@@ -49,6 +49,38 @@ def test_planck_class(capsys):
     run_cosmosis("examples/planck_class.ini", override={("class","mpk"):"T"})
     check_no_camb_warnings(capsys)
 
+
+
+planck_lite_expected_values = {
+    ("T", "TTTEEE", "2018"): "-2864.26",
+    ("F", "TTTEEE", "2018"): "-2863.30",
+    ("T", "TT", "2018"): ["-1712.90", "-1712.89"],
+    ("F", "TT", "2018"): "-1711.94",
+    ("T", "TTTEEE", "2015"): "-2812.68",
+    ("F", "TTTEEE", "2015"): "-2811.98",
+    ("T", "TT", "2015"): "-1744.11",
+    ("F", "TT", "2015"): "-1743.41",
+}
+
+
+@pytest.mark.parametrize("choices,expected", list(planck_lite_expected_values.items()))
+def test_planck_lite(choices, expected, capsys):
+    use_low_ell_bins, spectra, year = choices
+
+    override = {
+        ("camb","feedback"): "0",
+        ("planck", "spectra"): spectra,
+        ("planck", "year"): year,
+        ("planck", "use_low_ell_bins"): use_low_ell_bins,
+    }
+    if isinstance(expected, str):
+        expected = [expected]
+    run_cosmosis("examples/planck_lite.ini", override=override)
+    check_likelihood(capsys, *expected)
+
+
+
+
 def test_wmap(capsys):
     if not os.path.exists("likelihood/wmap9/data/lowlP/mask_r3_p06_jarosik.fits"):
         pytest.skip("WMAP data not found")
@@ -131,6 +163,8 @@ def test_des_y3_5x2pt(capsys):
 
 
 def test_des_y3_6x2pt(capsys):
+    if not os.path.exists("likelihood/planck2018/baseline/plc_3.0/lensing/smicadx12_Dec5_ftl_mv2_ndclpp_p_teb_consext8_CMBmarged.clik_lensing"):
+        pytest.skip("Planck data not found")
     run_cosmosis("examples/des-y3-6x2pt.ini")
     check_no_camb_warnings(capsys)
 
@@ -225,3 +259,18 @@ def test_candl(capsys):
         pytest.skip("Candl not installed")
     run_cosmosis("examples/candl_test.ini")
     check_likelihood(capsys, "-5.83")
+
+
+def test_hillipop_lollipop(capsys):
+    if os.getenv("GITHUB_ACTIONS"):
+        pytest.skip("The caching for cobaya is not working on github actions")
+    try:
+        import planck_2020_lollipop
+    except ImportError:
+        pytest.skip("Planck 2020 lollipop likelihood not found")
+    run_cosmosis("examples/planck-hillipop-lollipop.ini")
+    check_likelihood(capsys, "-6476.91", "-6476.90")
+
+def test_decam(capsys):
+    run_cosmosis("examples/decam-13k.ini", override={("runtime","sampler"):"test"})
+    check_likelihood(capsys, "9442.38")
