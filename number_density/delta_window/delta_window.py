@@ -18,9 +18,10 @@ def setup(options):
     return z, section, zmin, zmax, dz
 
 def delta(x, mu):
+    dx = x[1] - x[0]
     idx = (np.abs(x - mu)).argmin()
     ddf = np.zeros_like(x)
-    ddf[idx] = 1.0
+    ddf[idx] = 1.0 / dx
     return ddf
 
 def execute(block, config):

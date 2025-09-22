@@ -44,14 +44,7 @@ def extract_hsc_prediction(sacc_data, block, data_type, section, **kwargs):
     if options is None:
         raise ValueError("HSC likelihood requires options to be passed")
     
-    category = kwargs.get("category")
-    if category == "spectrum":
-        x_theory = block[section, "ell"]
-    elif category == "real":
-        x_theory = block[section, "theta"]
-    #TO-DO: Decide on final nomenclature for cosebis and psi-stats!
-    elif category == "cosebi":
-        x_theory = block[section, "cosebis_n"]
+    x_theory = block[section, "ell"]
     is_auto = block[section, "is_auto"]
 
     # We build up these vectors from all the data points.
@@ -111,13 +104,7 @@ def extract_hsc_prediction(sacc_data, block, data_type, section, **kwargs):
 
         for d in sacc_data.get_data_points(data_type, (b1, b2)):
             index = d['window_ind']
-            if category == "spectrum":
-                x_nominal = d['ell']
-            elif category == "real":
-                x_nominal = d['theta']
-            #TO-DO: Decide on final nomenclature for cosebis and psi-stats!
-            elif category == "cosebi":
-                x_nominal = d['cosebis_n']
+            x_nominal = d['ell']
             weight = window.weight[:, index]
 
             # The weight away should hopefully sum to 1 anyway but we should
