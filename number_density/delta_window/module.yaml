@@ -16,9 +16,25 @@ explanation: |
      sampling instead of the ini file."
 params:
     z:
-        meaning: Redshift(s) of the bins
+        meaning: Redshift(s) of the position of te delta function(s). If multiple values are given, they will be used for multiple bins.
         type: real or real 1d
         default:
+    zmin:
+        meaning: Minimum redshift
+        type: real
+        default: 0.0
+    zmax:
+        meaning: Maximum redshift
+        type: real
+        default: 3.0
+    dz:
+        meaning: Width of the bins
+        type: real
+        default: 0.01
+    output_section:
+        meaning: Section name in the block to store the output
+        type: string
+        default: wl_number_density
 inputs: {}
 outputs:
     wl_number_density:

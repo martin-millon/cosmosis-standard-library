@@ -5,7 +5,7 @@ import pathlib
 import sys
 
 def extract_one_point_prediction(sacc_data, block, data_type, section, **kwargs):
-    category = kwargs.get("category")
+    category = kwargs["category"]
     tracer_tuples = sacc_data.get_tracer_combinations(data_type)
 
     theory_vector = []
@@ -43,10 +43,11 @@ def extract_one_point_prediction(sacc_data, block, data_type, section, **kwargs)
             index = sacc_data.get_tag("window_ind", data_type, t)
             weight = window.weight[:, index]
 
-            # The weight away should hopefully sum to 1 anyway but we should
-            # probably not rely on that always being true.
             # TO-DO: Check this for real statistics, but should be ok.
-            binned_theory = (weight @ theory_interpolated) / weight.sum()
+            # We don't automatically renormalize the weights.
+            # Some contexts, like the output from NaMaster,
+            # use non-unit-sum weights
+            binned_theory = (weight @ theory_interpolated)
 
         theory_vector.append(binned_theory)
         observable_min_vector.append(sacc_data.get_tag(f"{key}_min", data_type, t))
