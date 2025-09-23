@@ -128,7 +128,7 @@ class SaccClLikelihood(GaussianLikelihood):
                 if self.options.has_value(option_name) or (len(tracers) == 1 and self.options.has_value(invalid_name)):
                     # if invalid_name is used, warn and substitute
                     if len(tracers) == 1 and self.options.has_value(invalid_name):
-                        print(f"Warning: '{invalid_name}' is not a valid option name. "
+                        print(f"**** WARNING: '{invalid_name}' is not a valid option name. "
                               f"Use '{option_name}' instead.")
                         option_name = invalid_name
                     r = self.options.get_double_array_1d(option_name)
