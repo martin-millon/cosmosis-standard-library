@@ -118,13 +118,20 @@ class SaccClLikelihood(GaussianLikelihood):
             for tracers in s.get_tracer_combinations(name):
                 if len(tracers) == 2:
                     t1, t2 = tracers
-                    option_name = "angle_range_{}_{}_{}".format(name, t1, t2)
+                    option_name = f"angle_range_{name}_{t1}_{t2}"
                 else:
                     t1 = tracers[0]
-                    option_name = "onepoint_range_{}_{}".format(name, t1)
+                    option_name = f"onepoint_range_{name}_{t1}"
+                    # also allow the invalid "angle_range" form
+                    invalid_name = f"angle_range_{name}_{t1}"
+
+                    if self.options.has_value(invalid_name):
+                        print(f"Warning: '{invalid_name}' is not a valid option name. "
+                              f"Use '{option_name}' instead.")
+                    option_name = invalid_name
                 if self.options.has_value(option_name):
                     r = self.options.get_double_array_1d(option_name)
-                    tags = np.unique([key for row in s.data if row.data_type is name for key in row.tags])
+                    tags = np.unique([k for row in s.get_data_points(name) for k in row.tags])
                     for tag in valid_tags:
                         if tag in tags:
                             # Determine the tracer tuple based on the tag and data type
@@ -137,7 +144,7 @@ class SaccClLikelihood(GaussianLikelihood):
                             s.remove_selection(name, tracer_tuple, **kwargs_gt)
 
         for name in self.used_names:
-            option_name = "cut_{}".format(name)
+            option_name = f"cut_{name}"
             if self.options.has_value(option_name):
                 cuts = self.options[option_name].split()
                 for cut in cuts:
@@ -154,11 +161,11 @@ class SaccClLikelihood(GaussianLikelihood):
             else:
                 data_points = 0
             if name in self.used_names:
-                print("    - {}  {} data points after cuts {}".format(name,  data_points, "  [using in likelihood]"))
+                print(f"    - {name}  {data_points} data points after cuts   [using in likelihood]")
                 total_data_points += data_points
             else:
-                print("    - {}  {} data points after cuts {}".format(name, data_points, "  [not using in likelihood]"))
-        print("Total data points used = {}".format(total_data_points))
+                print(f"    - {name}  {data_points} data points after cuts   [not using in likelihood]")
+        print(f"Total data points used = {total_data_points}")
 
         self.sections_for_names = {}
         for name in final_names:
@@ -185,7 +192,7 @@ class SaccClLikelihood(GaussianLikelihood):
         # Make sure
         if len(data_vector) == 0:
             raise ValueError(
-                "No data was chosen to be used from 2-point data file {0}. It was either not selectedin data_sets or cut out".format(filename))
+                f"No data was chosen to be used from 2-point data file {filename}. It was either not selectedin data_sets or cut out")
 
         # The x data is not especially useful here, so return None.
         # We will access the self.sacc_data directly later to
@@ -242,10 +249,10 @@ class SaccClLikelihood(GaussianLikelihood):
             x = (r - 1.0) / (r - p - 2.0)
             C = C * x
             print()
-            print("You set covariance_realizations={} in the 2pt likelihood parameter file".format(r))
+            print(f"You set covariance_realizations={r} in the 2pt likelihood parameter file")
             print("So I will apply the Anderson-Hartlap correction to the covariance matrix")
-            print("The covariance matrix is nxn = {}x{}".format(p, p))
-            print("So the correction scales the covariance matrix by (r - 1) / (r - n - 2) = {}".format(x))
+            print(f"The covariance matrix is nxn = {p}x{p}")
+            print(f"So the correction scales the covariance matrix by (r - 1) / (r - n - 2) = {x}")
             print()
         return C
 
