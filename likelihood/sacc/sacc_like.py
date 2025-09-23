@@ -125,11 +125,12 @@ class SaccClLikelihood(GaussianLikelihood):
                     # also allow the invalid "angle_range" form
                     invalid_name = f"angle_range_{name}_{t1}"
 
-                    if self.options.has_value(invalid_name):
+                if self.options.has_value(option_name) or (len(tracers) == 1 and self.options.has_value(invalid_name)):
+                    # if invalid_name is used, warn and substitute
+                    if len(tracers) == 1 and self.options.has_value(invalid_name):
                         print(f"Warning: '{invalid_name}' is not a valid option name. "
                               f"Use '{option_name}' instead.")
-                    option_name = invalid_name
-                if self.options.has_value(option_name):
+                        option_name = invalid_name
                     r = self.options.get_double_array_1d(option_name)
                     tags = np.unique([k for row in s.get_data_points(name) for k in row.tags])
                     for tag in valid_tags:
