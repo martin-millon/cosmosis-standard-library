@@ -1,12 +1,10 @@
 from cosmosis.datablock import names, option_section as opt
-from cosmosis.datablock.cosmosis_py import errors
 import numpy as np
-import warnings
 import traceback
 import sys
 import pathlib
 import pickle
-from scipy.interpolate import InterpolatedUnivariateSpline, RectBivariateSpline, CubicSpline, UnivariateSpline
+from scipy.interpolate import CubicSpline, UnivariateSpline
 
 # Finally we can now import camb
 import camb
