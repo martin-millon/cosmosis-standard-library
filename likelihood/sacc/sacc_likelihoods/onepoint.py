@@ -60,6 +60,7 @@ def extract_one_point_prediction(sacc_data, block, data_type, section, **kwargs)
         f"{key}_min": np.concatenate(observable_min_vector),
         f"{key}_max": np.concatenate(observable_max_vector),
         f"{key}_bin": np.concatenate(bins_vector),
+        f"{key}_theory": theory_vector,
     }
     return theory_vector, metadata
 
