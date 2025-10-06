@@ -35,10 +35,6 @@ def extract_one_point_prediction(sacc_data, block, data_type, section, **kwargs)
         # TO-DO: Check if the window thing is ok for 1pt stats and how to do the binning here either way.
         x_nominal = np.array(sacc_data.get_tag(key, data_type, t))
         
-        #tmp test, remove after!:
-        bins = np.linspace(9.3, 11.3, 12 + 1, endpoint=True)
-        x_nominal = 10.0**((bins[1:] + bins[:-1]) / 2.0)
-        
         if window is None:
             binned_theory = theory_spline(x_nominal)
         else:

@@ -1,7 +1,7 @@
 name: cosmopower
 version: 1.0
-purpose: Boltzmann and background integrator for BG, CMB, and matter power
-url: cosmopower_url
+purpose: Interface to cosmopower emulators for fast cosmological calculations, a drop-in replacement for camb.
+url: https://github.com/alessiospuriomancini/cosmopower
 interface: cosmopower_interface.py
 attribution: "Andrej Dvornik, Pierre Burger, Naomi Robertson, Joe Zuntz"
 rules: 
@@ -15,6 +15,17 @@ assumptions:
 explanation: |
     
 params:
+    cosmopower_folder:
+        meaning: Folder where the cosmopower trained emulator models are stored. 
+            These need to be trained using the cosmopower training option in CosmoSIS 
+            (or in the case of CMB be provided from the Alessio).
+        type: str
+        default:
+    use_cosmopower_kvec:
+        meaning: Whether to use the cosmopower k vector for P(k,z) output. If false,
+            a CAMB k vector is used.
+        type: bool
+        default: true
     mode:
         meaning: Choose from Background, thermal, cmb, power, or all. In background
             mode only the expansion history is calculated. In thermal mode the recombination
