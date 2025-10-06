@@ -11,6 +11,7 @@ nuisance_parameters = [
 ]
 
 def setup(options):
+    raise RuntimeError("We are not quite sure if the Hillipop and Lollipop interfaces are correctly set up yet. You can remove this line to help test.")
     mode = options.get_string(option_section, "mode", default="TTTEEE").lower()
     if mode == "lowle":
         calculator = lowlE()

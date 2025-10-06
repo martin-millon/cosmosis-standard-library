@@ -262,6 +262,7 @@ def test_candl(capsys):
 
 
 def test_hillipop_lollipop(capsys):
+    pytest.skip("Skipping Hillipop/Lollipop until we are sure this is working")
     if os.getenv("GITHUB_ACTIONS"):
         pytest.skip("The caching for cobaya is not working on github actions")
     try:
