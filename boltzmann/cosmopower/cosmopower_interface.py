@@ -62,10 +62,10 @@ def get_predictions(params, network, reference, k_rebin):
     k = network.modes
 
     # Get the prediction, and convert to physical values
-    P = network.predictions_np(params)
+    logP = network.predictions_np(params)
     for i in range(P.shape[0]):
-        P[i] = P[i] + reference 
-    P = 10 ** P
+        logP[i] = logP[i] + reference 
+    P = 10 ** logP
 
     # If necessary, rebin the power spectrum to the requested k values
     if k_rebin is not None:
@@ -75,6 +75,13 @@ def get_predictions(params, network, reference, k_rebin):
     return k, P
 
 def set_params(block, params_in, fixed_params, limits, z):
+    """
+    Get all parameters from block and give them the
+    names and form that cosmopower expects.
+
+    For free parameters, it checks that they are in the required ranges. 
+    For fixed params, it checks that they are the same as used in training.
+    """
 
     params = {}
     for param in params_in:
@@ -142,28 +149,110 @@ def setup(options):
     # Cosmopower specific settings!
     cosmopower_root_filename = options.get_string(opt, 'cosmopower_folder', default='')
     if config['WantTransfer']:
-        more_config['cosmopower_k'] = options.get_bool(opt, 'use_cosmopower_kvec', default=False)
-        more_config['fixed_params'] = pickle.load(open(f'{cosmopower_root_filename}/cosmopower_emulator_fixed_params.pkl', 'rb'))
-        more_config['limits'] = pickle.load(open(f'{cosmopower_root_filename}/cosmopower_emulator_param_limits.pkl', 'rb'))
+        more_config['cosmopower_k'] = options.get_bool(
+            opt, 'use_cosmopower_kvec', default=False
+        )
+
+        more_config['fixed_params'] = pickle.load(
+            open(
+                f'{cosmopower_root_filename}/cosmopower_emulator_fixed_params.pkl',
+                'rb'
+            )
+        )
+
+        more_config['limits'] = pickle.load(
+            open(
+                f'{cosmopower_root_filename}/cosmopower_emulator_param_limits.pkl',
+                'rb'
+            )
+        )
+
         # We require delta_tot case to be present in order to get the growth parameters!
         if 'delta_tot' not in more_config['power_spectra']:
-            raise ValueError("We require 'delta_tot' to be present in 'power_spectra'. Rerun the training with this option enabled in CAMB!")
+            raise ValueError(
+                "We require 'delta_tot' to be present in 'power_spectra'. "
+                "Rerun the training with this option enabled in CAMB!"
+            )
+
         for transfer_type in more_config['power_spectra']:
-            more_config[f'{matter_power_section_names[transfer_type]}_lin_cp'] = cp.cosmopower_NN(restore=True, restore_filename=f'{cosmopower_root_filename}/cosmopower_emulator_{matter_power_section_names[transfer_type]}_lin')
-            more_config[f'{matter_power_section_names[transfer_type]}_nl_cp'] = cp.cosmopower_NN(restore=True, restore_filename=f'{cosmopower_root_filename}/cosmopower_emulator_{matter_power_section_names[transfer_type]}_nl') if config['NonLinear'] != 'NonLinear_none' else None
-            more_config[f'reference_{matter_power_section_names[transfer_type]}_lin_cp'] = np.log10(pickle.load(open(f'{cosmopower_root_filename}/cosmopower_emulator_{matter_power_section_names[transfer_type]}_lin_reference.pkl', 'rb')))
-            more_config[f'reference_{matter_power_section_names[transfer_type]}_nl_cp'] = np.log10(pickle.load(open(f'{cosmopower_root_filename}/cosmopower_emulator_{matter_power_section_names[transfer_type]}_nl_reference.pkl', 'rb'))) if config['NonLinear'] != 'NonLinear_none' else None
+            name = matter_power_section_names[transfer_type]
+
+            more_config[f'{name}_lin_cp'] = cp.cosmopower_NN(
+                restore=True,
+                restore_filename=(
+                    f'{cosmopower_root_filename}/cosmopower_emulator_{name}_lin'
+                )
+            )
+
+            more_config[f'{name}_nl_cp'] = (
+                cp.cosmopower_NN(
+                    restore=True,
+                    restore_filename=(
+                        f'{cosmopower_root_filename}/cosmopower_emulator_{name}_nl'
+                    )
+                )
+                if config['NonLinear'] != 'NonLinear_none'
+                else None
+            )
+
+            more_config[f'reference_{name}_lin_cp'] = np.log10(
+                pickle.load(
+                    open(
+                        f'{cosmopower_root_filename}/'
+                        f'cosmopower_emulator_{name}_lin_reference.pkl',
+                        'rb'
+                    )
+                )
+            )
+
+            more_config[f'reference_{name}_nl_cp'] = (
+                np.log10(
+                    pickle.load(
+                        open(
+                            f'{cosmopower_root_filename}/'
+                            f'cosmopower_emulator_{name}_nl_reference.pkl',
+                            'rb'
+                        )
+                    )
+                )
+                if config['NonLinear'] != 'NonLinear_none'
+                else None
+            )
+
                             
     # CosmoPower cls
     if config['WantCls']:
-        more_config['TT_cp'] = cp.cosmopower_NN(restore=True, restore_filename=f'{cosmopower_root_filename}/cmb_TT_NN')
-        more_config['TE_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename=f'{cosmopower_root_filename}/cmb_TE_PCAplusNN')
-        more_config['EE_cp'] = cp.cosmopower_NN(restore=True, restore_filename=f'{cosmopower_root_filename}/cmb_EE_NN')
-        more_config['PP_cp'] = cp.cosmopower_PCAplusNN(restore=True, restore_filename=f'{cosmopower_root_filename}/cmb_PP_PCAplusNN')
+        print(
+            "WARNING: Using CosmoPower CMB emulators for TT, TE, EE and PP! "
+            "These are assumed to be trained by Spurio Mancini et al. 2021 and may "
+            "not be accurate for any use case! If you are using some other "
+            "emulators for the CMB spectra, please be warned!"
+        )
+
+        more_config['TT_cp'] = cp.cosmopower_NN(
+            restore=True,
+            restore_filename=f'{cosmopower_root_filename}/cmb_TT_NN'
+        )
+
+        more_config['TE_cp'] = cp.cosmopower_PCAplusNN(
+            restore=True,
+            restore_filename=f'{cosmopower_root_filename}/cmb_TE_PCAplusNN'
+        )
+
+        more_config['EE_cp'] = cp.cosmopower_NN(
+            restore=True,
+            restore_filename=f'{cosmopower_root_filename}/cmb_EE_NN'
+        )
+
+        more_config['PP_cp'] = cp.cosmopower_PCAplusNN(
+            restore=True,
+            restore_filename=f'{cosmopower_root_filename}/cmb_PP_PCAplusNN'
+        )
+
 
     return [config, more_config]
 
-def compute_growth_factor(block, P_tot, k, z, more_config):
+def compute_growth_factor(P_tot, z):
     P_kmin = P_tot[:,0]
     D = np.sqrt(P_kmin / P_kmin[0]).squeeze()
     
@@ -186,56 +275,80 @@ def save_matter_power(r, block, config, more_config):
     p = r.Params
     # Grids in k, z on which to save matter power.
     # There are two kmax values - the max one calculated directly,
-    # and the max one extrapolated out too.  We output to the larger
-    # of these
+    # and the max one extrapolated out too. We output to the larger of these.
     kmax_power = max(more_config['kmax'], more_config['kmax_extrapolate'])
     z = make_z_for_pk(more_config)[::-1]
     nz = len(z)
 
     k_rebin = None
     if not more_config['cosmopower_k']:
-        k_rebin = np.logspace(np.log10(6.712847971357405e-05), np.log10(kmax_power), more_config['nk'])
-        # For some reason the kmin is in camb set to 1e-4 * 0.671284..., and it doesn't seem to change with varying h0
+        k_rebin = np.logspace(
+            np.log10(6.712847971357405e-05),
+            np.log10(kmax_power),
+            more_config['nk']
+        )
+        # For some reason the kmin is in CAMB set to 1e-4 * 0.671284...
+        # and it doesn't seem to change with varying h0.
 
     P_tot = None
     for transfer_type in more_config['power_spectra']:
-                
-        params = set_params(block, more_config[f'{matter_power_section_names[transfer_type]}_lin_cp'].parameters, more_config['fixed_params'], more_config['limits'], z)
+        name = matter_power_section_names[transfer_type]
 
-        # We need to replace the redshift value for the redshift array
-        # The cosmopower interface expects an array of parameter values for each redshift
-        # that we are emulating, even when the parameters are all the same
-        params = {par: np.full(z.size, v) for par,v in params.items()}
+        params = set_params(
+            block,
+            more_config[f'{name}_lin_cp'].parameters,
+            more_config['fixed_params'],
+            more_config['limits'],
+            z
+        )
+
+        # The cosmopower interface expects an array of parameter values for
+        # each redshift that we are emulating, even when parameters are the same.
+        params = {par: np.full(z.size, v) for par, v in params.items()}
         params['z'] = z
 
-        k, P_lin = get_predictions(params, more_config[f'{matter_power_section_names[transfer_type]}_lin_cp'], more_config[f'reference_{matter_power_section_names[transfer_type]}_lin_cp'], k_rebin)
+        k, P_lin = get_predictions(
+            params,
+            more_config[f'{name}_lin_cp'],
+            more_config[f'reference_{name}_lin_cp'],
+            k_rebin
+        )
 
         # Save matter power as a grid
-        block.put_grid(f'{matter_power_section_names[transfer_type]}_lin', 'z', z, 'k_h', k, 'p_k', P_lin)
+        block.put_grid(f'{name}_lin', 'z', z, 'k_h', k, 'p_k', P_lin)
+
         if config['NonLinear'] != 'NonLinear_none':
-            k, P_nl = get_predictions(params, more_config[f'{matter_power_section_names[transfer_type]}_nl_cp'], more_config[f'reference_{matter_power_section_names[transfer_type]}_nl_cp'], k_rebin)
-            block.put_grid(f'{matter_power_section_names[transfer_type]}_nl', 'z', z, 'k_h', k, 'p_k', P_nl)
+            k, P_nl = get_predictions(
+                params,
+                more_config[f'{name}_nl_cp'],
+                more_config[f'reference_{name}_nl_cp'],
+                k_rebin
+            )
+            block.put_grid(f'{name}_nl', 'z', z, 'k_h', k, 'p_k', P_nl)
 
         # Save this for the growth rate later
         if transfer_type == 'delta_tot':
             P_tot = P_lin
 
-        primordial_PK = p.scalar_power(k * block[names.cosmological_parameters, 'h0'])
-        transfer = np.sqrt(P_lin[0, :] / (primordial_PK * k * 2.0 * np.pi**2.0))
         # Assumes we have P_lin at z=0!
-        # matter_power = primordial_PK * transfer**2 * k**4 / (k**3 / (2 * np.pi**2))
-        block.put_double_array_1d(f'{matter_power_section_names[transfer_type]}_transfer_func', 'k_h', k)
-        block.put_double_array_1d(f'{matter_power_section_names[transfer_type]}_transfer_func', 't_k', transfer)
+        # matter_power = primordial_PK * transfer**2 * k**4 /
+        #                (k**3 / (2 * np.pi**2))
+        primordial_PK = p.scalar_power(
+            k * block[names.cosmological_parameters, 'h0']
+        )
+        transfer = np.sqrt(
+            P_lin[0, :] / (primordial_PK * k * 2.0 * np.pi**2.0)
+        )
+        block.put_double_array_1d(f'{name}_transfer_func', 'k_h', k)
+        block.put_double_array_1d(f'{name}_transfer_func', 't_k', transfer)
 
     # Get growth rates and sigma_8
     rs_DV, H, DA, F_AP = r.get_BAO(z, p).T
-    D, f = compute_growth_factor(block, P_tot, k, z, more_config)
+    D, f = compute_growth_factor(P_tot, z)
 
     # Save growth rates and sigma_8
     block[names.growth_parameters, 'z'] = z
-    block[names.growth_parameters, 'a'] = 1/(1+z)
-    #block[names.growth_parameters, 'sigma_8'] = sigma_8
-    #block[names.growth_parameters, 'fsigma_8'] = fsigma_8
+    block[names.growth_parameters, 'a'] = 1 / (1 + z)
     block[names.growth_parameters, 'rs_DV'] = rs_DV
     block[names.growth_parameters, 'H'] = H
     block[names.growth_parameters, 'DA'] = DA
@@ -244,16 +357,30 @@ def save_matter_power(r, block, config, more_config):
     block[names.growth_parameters, 'f_z'] = f
 
     if not block.has_value(names.cosmological_parameters, 'sigma_8'):
-        sigma_sq_cs = CubicSpline(k, k**2 * window(k)**2 * P_tot[0] / (2 * np.pi**2))
+        sigma_sq_cs = CubicSpline(
+            k,
+            k**2 * window(k)**2 * P_tot[0] / (2 * np.pi**2)
+        )
         sigma_8 = np.sqrt(sigma_sq_cs.integrate(k.min(), k.max()))
         block[names.cosmological_parameters, 'sigma_8'] = sigma_8
-        block[names.cosmological_parameters, 'S_8'] = sigma_8 * np.sqrt(p.omegam / 0.3)
+        block[names.cosmological_parameters, 'S_8'] = (
+            sigma_8 * np.sqrt(p.omegam / 0.3)
+        )
     else:
-        block[names.cosmological_parameters, 'S_8'] = block[names.cosmological_parameters, 'sigma_8'] * np.sqrt(p.omegam / 0.3)
+        block[names.cosmological_parameters, 'S_8'] = (
+            block[names.cosmological_parameters, 'sigma_8']
+            * np.sqrt(p.omegam / 0.3)
+        )
 
 
 def save_cls(r, block, more_config):
-    # For now this only uses the pre-trained models from Spurio Mancini et al. 2021!
+    """
+    Save CMB power spectra to the block.
+
+    For now this only uses the pre-trained models from Spurio Mancini et al. 2021, 
+    as the CosmoPower training in CosmoSIS is not yet set up to do the training for the CMB spectra.
+    """
+    
     params = set_params_cls(block)
     cmb_unit = (2.7255e6)**2 #muK
     tt_spectra = more_config['TT_cp'].ten_to_predictions_np(params) * cmb_unit

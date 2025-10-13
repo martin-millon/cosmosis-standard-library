@@ -89,6 +89,13 @@ def make_z_for_pk(more_config):
     return z
 
 def cosmopower_k():
+    """ 
+    Set the k values if CAMB module is used for training the CosmoPower.
+    This is a fixed grid with variable precision to maximise the prediction 
+    accuracy where there are a lot of changes in the power spectra.
+
+    This is currently hardcoded to empirical values initially set by Pierre Burger.
+    """
     ranges = [
         (1e-5, 1e-4, 20),
         (1e-4, 1e-3, 40),
@@ -100,7 +107,7 @@ def cosmopower_k():
     ]
 
     # Generate each segment and concatenate them
-    k = np.concatenate([np.logspace(np.log10(start), np.log10(stop), num=num, endpoint=False) for start, stop, num in ranges])
+    k = np.concatenate([np.geomspace(start, stop, num=num, endpoint=False) for start, stop, num in ranges])
     return k
 
 def setup(options):

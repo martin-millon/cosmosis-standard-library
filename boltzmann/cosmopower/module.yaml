@@ -5,14 +5,19 @@ url: https://github.com/alessiospuriomancini/cosmopower
 interface: cosmopower_interface.py
 attribution: "Andrej Dvornik, Pierre Burger, Naomi Robertson, Joe Zuntz"
 rules: 
-cite: ""
--   
--   
+cite: 
+-   https://arxiv.org/abs/2106.03846
 
 assumptions:
 -   
 
-explanation: |
+explanation: | 
+    The cosmopower module provides an interface to the cosmopower emulators for fast cosmological calculations.
+    It is a drop-in replacement for camb, and can be used in any pipeline that uses camb.
+    The cosmopower emulators need to be trained using the cosmopower training option in CosmoSIS, or in the case of CMB be provided from Alessio.
+    The module will calculate background quantities (directly using the CAMB in background mode), CMB power spectra, and matter power spectra (from trained emulators).
+    It can also calculate distance measures and growth parameters (using both CAMB in the background mode and the trained emulators).
+    The module can use the cosmopower k vector for P(k,z) output, or a CAMB k vector.
     
 params:
     cosmopower_folder:
