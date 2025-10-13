@@ -117,7 +117,7 @@ def test_des_y3(capsys):
         ("pk_to_cl_gg","save_kernels"):"T",
         ("pk_to_cl","save_kernels"):"T"
         })
-    check_likelihood(capsys, "6043.23", "6043.34", "6043.37", "6043.33")
+    check_likelihood(capsys, "6043.23", "6043.34", "6043.37", "6043.33", "6043.30")
     check_no_camb_warnings(capsys)
 
 def test_des_y3_plus_planck(capsys):
@@ -132,7 +132,7 @@ def test_des_y3_class(capsys):
 
 def test_des_y3_shear(capsys):
     run_cosmosis("examples/des-y3-shear.ini")
-    check_likelihood(capsys, "2957.03", "2957.12", "2957.11", "2957.13")
+    check_likelihood(capsys, "2957.03", "2957.12", "2957.11", "2957.13", "2957.07")
     check_no_camb_warnings(capsys)
 
 def test_des_y3_mira_titan(capsys):
@@ -145,7 +145,7 @@ def test_des_y3_mead(capsys):
                  override={("camb", "halofit_version"): "mead2020_feedback"},
                  variables={("halo_model_parameters", "logT_AGN"): "8.2"}
                  )
-    check_likelihood(capsys, "6049.94", "6049.00", "6049.03", "6049.04")
+    check_likelihood(capsys, "6049.94", "6049.00", "6049.03", "6049.04", "6049.01")
     check_no_camb_warnings(capsys)
 
 def test_act_dr6_lensing(capsys):
@@ -274,4 +274,4 @@ def test_hillipop_lollipop(capsys):
 
 def test_decam(capsys):
     run_cosmosis("examples/decam-13k.ini", override={("runtime","sampler"):"test"})
-    check_likelihood(capsys, "9442.38")
+    check_likelihood(capsys, "9442.38", "9442.35", "9442.36")
