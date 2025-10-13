@@ -123,7 +123,7 @@ def set_params_cls(block):
         'h': [block[cosmo, 'h0']],
         'tau_reio': [block[cosmo, 'tau']],
         'n_s': [block[cosmo, 'n_s']],
-        'ln10^{10}A_s': [block[cosmo, 'A_s']]
+        'ln10^{10}A_s': [np.log(block[cosmo, 'A_s'] * 1e10)]
     }
     # Note: the p(k) emulator writes ln10^{10}A_s to the datablock as 'A_s'. Wonderful naming convention!
     limits  = {
