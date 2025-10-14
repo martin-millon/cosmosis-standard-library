@@ -2,7 +2,7 @@ try:
     import act_dr6_mflike
     import mflike
 except ImportError:
-    raise RuntimeError('The act_dr6_lenslike python module is required for the act_dr6_lenslike likelihood. Try running: pip install act_dr6_lenslike.')
+    raise RuntimeError('The act_dr6_mflike python module is required for the act_dr6_like likelihood. Try running: pip install act_dr6_mflike.')
 from cosmosis.datablock import names
 cosmo = names.cosmological_parameters
 import numpy as np
@@ -60,9 +60,9 @@ def execute(block, config):
     act, fg = config
 
     cl_dict = {
-        "tt": block[names.cmb_cl, 'tt'],
-        "te": block[names.cmb_cl, 'te'],
-        "ee": block[names.cmb_cl, 'ee'],
+        "tt": np.append(np.array([0,0]), block[names.cmb_cl, 'tt']),
+        "te": np.append(np.array([0,0]), block[names.cmb_cl, 'te']),
+        "ee": np.append(np.array([0,0]), block[names.cmb_cl, 'ee']),
     }
 
     nuisance = {}
