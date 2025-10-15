@@ -338,6 +338,21 @@ class Spectrum(object):
         alpha = block[ f"mag_alpha_{sample}", f"alpha_{bin_num}" ]
         return 2 * (alpha - 1)
 
+    def compute_shared_chi_range(self, sig_over_dchi):
+        """
+        Compute the minimum and maximum chi for the Limber integral
+        over all of the bins, and a suitable dchi spacing.
+        """
+        chi_min = np.inf
+        chi_max = -np.inf
+        dchi = np.inf
+        kernels = self.source.kernels[self.sample_a]
+        for i in range(1, kernels.nbin+1):
+            spl = kernels.get_kernel_spline(self.kernel_types[0], i)
+            chi_min = min(chi_min, spl.xmin_clipped)
+            chi_max = max(chi_max, spl.xmax_clipped)
+            dchi = min(dchi, spl.sigma / sig_over_dchi)
+        return float(chi_min), float(chi_max), float(dchi)
     def compute_limber(self, block, ell, bin1, bin2, dchi=None, sig_over_dchi=100.,
         chimin=None, chimax=None):
         r"""
@@ -1639,12 +1654,18 @@ class SpectrumCalculator(object):
         block[spectrum.section_name, 'auto_only'] = (
             spectrum.section_name in self.auto_only_section_names)
 
-        # Set up nay required power splines
+        # Set up any required power splines
         spectrum.prepare(block, lin_bias_prefix=self.lin_bias_prefix)
 
         if self.verbose:
             print(f"Computing spectrum {spectrum.__class__.__name__} ({spectrum.section_name}) for samples"
                   f" ({spectrum.sample_a}, {spectrum.sample_b}) from P(k) {spectrum.input_section_name}")
+
+        # The caching of P(k) at the grid points we need is more effective if
+        # everything shares a chimin and chimax so set that now, even though it
+        # means that we are doing some integration over a wider range than strictly
+        # necessary for some bin pairs.
+        chimin, chimax, dchi = spectrum.compute_shared_chi_range(self.sig_over_dchi)
 
         for i in range(na):
             if not spectrum.should_do_bin(i+1) and spectrum.len_only_bins == na:
@@ -1670,11 +1691,14 @@ class SpectrumCalculator(object):
                     if spectrum.has_rsd:
                         exact_kwargs["do_rsd"] = self.do_rsd
                     ell, c_ell = spectrum.compute(block, self.ell_limber, i+1, j+1,
-                        sig_over_dchi_limber=self.sig_over_dchi, ell_exact=self.ell_exact,
-                        exact_kwargs=exact_kwargs)
+                        ell_exact=self.ell_exact,
+                        chimin=chimin, chimax=chimax, dchi_limber=dchi,
+                        exact_kwargs=exact_kwargs
+                    )
                 else:
                     ell, c_ell = spectrum.compute(block, self.ell, i+1, j+1,
-                        sig_over_dchi_limber=self.sig_over_dchi)
+                                                  chimin=chimin, chimax=chimax, dchi_limber=dchi,
+                    )
 
                 block[spectrum.section_name, sep_name] = ell
                 block[spectrum.section_name, f'bin_{i+1}_{j+1}'] = c_ell
