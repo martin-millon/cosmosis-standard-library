@@ -3,7 +3,7 @@ version: 1
 purpose: Add point mass contributions to galaxy-galaxy lensing (gamma_t) signal
 url: ''
 interface: add_gammat_point_mass.py
-attribution: [Niall Maccrann]
+attribution: [Shivam Pandey]
 rules: []
 cite: [https://doi.org/10.1093/mnras/stz2761]
 assumptions:
