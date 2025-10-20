@@ -88,6 +88,27 @@ def make_z_for_pk(more_config):
 
     return z
 
+def cosmopower_k():
+    """ 
+    Set the k values if CAMB module is used for training the CosmoPower.
+    This is a fixed grid with variable precision to maximise the prediction 
+    accuracy where there are a lot of changes in the power spectra.
+
+    This is currently hardcoded to empirical values initially set by Pierre Burger.
+    """
+    ranges = [
+        (1e-5, 1e-4, 20),
+        (1e-4, 1e-3, 40),
+        (1e-3, 1e-2, 60),
+        (1e-2, 1e-1, 80),
+        (1e-1, 1, 100),
+        (1, 10, 120),
+        (10, 20, 40)
+    ]
+
+    # Generate each segment and concatenate them
+    k = np.concatenate([np.geomspace(start, stop, num=num, endpoint=False) for start, stop, num in ranges])
+    return k
 
 def setup(options):
     mode = options.get_string(opt, 'mode', default="all")
@@ -542,7 +563,7 @@ def compute_growth_factor(r, block, P_tot, k, z, more_config):
     P_kmin = P_tot.P(z, kmin)
 
     D = np.sqrt(P_kmin / P_kmin[0]).squeeze()
-    return D
+    return np.atleast_1d(D)
 
 
 def save_matter_power(r, block, more_config):
@@ -553,6 +574,8 @@ def save_matter_power(r, block, more_config):
     # of these
     kmax_power = max(more_config['kmax'], more_config['kmax_extrapolate'])
     z = make_z_for_pk(more_config)[::-1]
+    if block.has_value('redshift_as_parameter', 'z'):
+        z = np.atleast_1d(block['redshift_as_parameter', 'z'])
 
     P_tot = None
 
@@ -569,6 +592,8 @@ def save_matter_power(r, block, more_config):
         )
         assert P.islog
         k = np.logspace(np.log10(kcalc[0]), np.log10(kmax_power), more_config['nk'])
+        if block.has_value('redshift_as_parameter', 'z'):
+            k = cosmopower_k()
 
         # P.P evaluates at k instead of logk
         p_k = P.P(z, k, grid=True)
