@@ -7,8 +7,7 @@ interface: project_1d.py
 attribution: [CosmoSIS Team]
 rules: []
 cite: []
-assumptions:
--   
+assumptions: ["SDDD"]
 
 explanation: |
   This module combines tomographic / stellar mass bins of the individually calculated observables
@@ -31,7 +30,7 @@ params:
         default: mass
     correct_cosmo:
         meaning: To correct for fixed imput cosmology at which observable function was estiamted
-        tyle: bool
+        type: bool
         default: False
     sample:
         meaning: (optional) if nzs are given, look for the redshift distribution 

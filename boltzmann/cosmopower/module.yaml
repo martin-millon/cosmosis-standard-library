@@ -8,8 +8,7 @@ rules:
 cite: 
 -   https://arxiv.org/abs/2106.03846
 
-assumptions:
--   
+assumptions: []
 
 explanation: | 
     The cosmopower module provides an interface to the cosmopower emulators for fast cosmological calculations.
