@@ -4,10 +4,12 @@ purpose: Likelihood of the TDCOSMO IV analysis
 url: 10.1051/0004-6361/202038861
 interface: tdcosmo_likelihood.py
 attribution:
+  - TDCOSMO 2025 et al. (https://arxiv.org/abs/2506.03023)
   - TDCOSMO IV (Birrer et al.) for the measurement
   - Martin Millon, Judit Prat and Simon Birrer for the cosmoSIS implementation
 rules: None.
 cite:
+  - TDCOSMO Collaboration et al. 2025, arXiv:2506.03023
   - Birrer et al., 2020, A&A, 643, A165
   - Suyu et al., 2010, ApJ, 711, 201
   - Suyu et al., 2014, ApJ, 788, L35
@@ -32,10 +34,14 @@ explanation: |
     come from the same population of galaxies.
 
 params:
-  data_sets:
-    meaning: Data sets to use. Choose any combination of 'tdcosmo7', 'SLACS_SDSS' and 'SLACS_IFU'. You can use 'tdcosmo7+SLACS_SDSS' or 'tdcosmo7+SLACS_SDSS+SLACS_IFU' for example.
+  analysis:
+    meaning: Type of analysis to perform. 'tdcosmo_iv' or 'tdcomso2025' for the TDCOSMO IV and TDCOSMO 2025 analysis respectively.
     type: str
-    default: 'tdcosmo7'
+    default: 'tdcosmo2025'
+  data_sets:
+    meaning: Data sets to use. For the 'tdcosmo_iv' analysis, choose any combination of 'tdcosmo7', 'SLACS_SDSS' and 'SLACS_IFU'. You can use 'tdcosmo7+SLACS_SDSS' or 'tdcosmo7+SLACS_SDSS+SLACS_IFU' for example. For the 'tdcosmo2025' analysis, only 'tdcosmo2025' is implemented. External data sets are not supported yet.
+    type: str
+    default: 'tdcosmo2025'
 
   num_distribution_draws:
     meaning: Number of random realisation for kinematic computations.
@@ -89,6 +95,11 @@ inputs:
       meaning: 1-sigma Gaussian scatter in a_ani
       type: real
       default: 0.3
+
+    gamma_pl_RXJ1131:
+      meaning: Power-law slope of RXJ1131 lens mass profile. Used only in 'tdcosmo2025' analysis. The slope will be constrained using JWST NIRSpec IFU kinematics data.
+      type: real
+      default: 1.95
 
 outputs:
   likelihoods:

@@ -14,16 +14,17 @@ class TDCOSMOlenses:
     def __init__(self, options):
         dir_path = os.path.dirname(__file__)
 
-        self.data_sets = options.get_string("data_sets", default='tdcosmo7')
+        self.data_sets = options.get_string("data_sets", default='tdcosmo2025')
+        self.analysis = options.get_string("analysis", default='tdcosmo2025')
         self._num_distribution_draws = options.get_int("num_distribution_draws", default=200)
         self._distances_computation_module = options.get_string("distances_computation_module", default='astropy')
 
-        # 7 TDCOSMO lenses
+        # 7 TDCOSMO lenses (TDCOSMO IV)
         file = open(os.path.join(dir_path, 'tdcosmo7_likelihood_processed.pkl'), 'rb')
         tdcosmo7_likelihood_processed = pickle.load(file)
         file.close()
 
-        # 33 SLACS lenses with SDSS spectroscopy
+        # 33 SLACS lenses with SDSS spectroscopy (TDCOSMO IV) -- OUTDATED, DO NOT USE
         file = open(os.path.join(dir_path, 'slacs_sdss_likelihood_processed.pkl'), 'rb')
         slacs_sdss_likelihood_processed = pickle.load(file)
         file.close()
@@ -33,8 +34,15 @@ class TDCOSMOlenses:
         slacs_ifu_likelihood_processed = pickle.load(file)
         file.close()
 
+        # TDCOSMO2025 (8 Time-delay lenses)
+        file = open(os.path.join(dir_path, 'tdcosmo2025_likelihood_processed_const_.pkl'), 'rb')
+        tdcosmo2025_likelihood_processed = pickle.load(file)
+        file.close()
+
         # here we update each individual lens likelihood configuration with the setting of the Monte-Carlo marginalization over hyper-parameter distributions
         for lens in tdcosmo7_likelihood_processed:
+            lens['num_distribution_draws'] = self._num_distribution_draws
+        for lens in tdcosmo2025_likelihood_processed:
             lens['num_distribution_draws'] = self._num_distribution_draws
         for lens in slacs_sdss_likelihood_processed:
             lens['num_distribution_draws'] = self._num_distribution_draws
@@ -42,22 +50,43 @@ class TDCOSMOlenses:
             lens['num_distribution_draws'] = self._num_distribution_draws
 
         # ====================
-        # TDCOSMO 7 likelihood
+        # TDCOSMO IV or TDCOSMO2025 likelihood
         # ====================
 
         # hear we build a likelihood instance for the sample of 7 TDCOSMO lenses,
         lens_list = []
-        if 'tdcosmo7' in self.data_sets:
-            lens_list += tdcosmo7_likelihood_processed
-        if 'SLACS_SDSS' in self.data_sets:
-            lens_list += slacs_sdss_likelihood_processed
-        if 'SLACS_IFU' in self.data_sets:
-            lens_list += slacs_ifu_likelihood_processed
+        if self.analysis == 'tdcosmo_iv':
+            kwargs_global_model = None
+            if 'tdcosmo7' in self.data_sets:
+                lens_list += tdcosmo7_likelihood_processed
+            if 'SLACS_SDSS' in self.data_sets:
+                lens_list += slacs_sdss_likelihood_processed
+            if 'SLACS_IFU' in self.data_sets:
+                lens_list += slacs_ifu_likelihood_processed
 
-        assert len(
-            lens_list) > 0, "Data not found ! Add at least one of those 3 data sets 'tdcosmo7', 'SLACS_SDSS' or 'SLACS_IFU'"
+            assert len(
+                lens_list) > 0, "Data not found ! Add at least one of those 3 data sets 'tdcosmo7', 'SLACS_SDSS' or 'SLACS_IFU'"
+
+        elif self.analysis == 'tdcosmo2025':
+            kwargs_global_model =  {'lambda_mst_sampling': True,
+                      'lambda_mst_distribution': 'GAUSSIAN',
+                      'anisotropy_sampling': True,
+                      'sigma_v_systematics': False,
+                      'anisotropy_model': 'const',
+                      'anisotropy_distribution': 'GAUSSIAN',  # for OM, GOM, use GAUSSIAN_SCALED, for const use GAUSSIAN
+                      'alpha_lambda_sampling': True,
+                      'anisotropy_parameterization': 'TAN_RAD',
+                     }
+            if 'tdcosmo2025' in self.data_sets:
+                lens_list += tdcosmo2025_likelihood_processed
+
+            assert len(
+                lens_list) > 0, "Data not found ! Add the data set 'tdcosmo2025'"
+        else:
+            raise ValueError("Analysis not recognized. Choose either 'tdcosmo_iv' or 'tdcosmo2025'")
+
         # choose which likelihood you want here:
-        self._likelihood = LensSampleLikelihood(lens_list)
+        self._likelihood = LensSampleLikelihood(lens_list, kwargs_global_model=kwargs_global_model)
 
         # choose if you want the full astropy distance calculation or a interpolated version of it (for speed-up)
         self._interpolate_distances_type = 'None'
@@ -80,7 +109,7 @@ class TDCOSMOlenses:
         ol = 1 - om - ok
 
         if self._distances_computation_module == 'astropy':
-            # we are using standard astropy cosmology for distance compuation
+            # we are using standard astropy cosmology for distance computation
             cosmo = w0waCDM(H0=H0, Om0=om, Ode0=ol, Ob0=ob, w0=w0, wa=wa, m_nu=mnu, Neff=nnu)
         elif self._distances_computation_module == 'CosmoInterp':
             # we are using an interpolated version of the standard astropy cosmology (for speed-up)
@@ -107,9 +136,13 @@ class TDCOSMOlenses:
         log_lambda_mst_sigma = block['nuisance_strong_lensing', 'log_lambda_mst_sigma']
         lambda_mst_sigma = 10**log_lambda_mst_sigma
         # a_ani = block['nuisance_strong_lensing', 'a_ani']
-        # a_ani_sigma = block['nuisance_strong_lensing', 'a_ani_sigma']        
-        log_a_ani = block['nuisance_strong_lensing', 'log_a_ani']
-        a_ani = 10**log_a_ani
+        # a_ani_sigma = block['nuisance_strong_lensing', 'a_ani_sigma']
+        if self.analysis == 'tdcosmo_iv':
+            log_a_ani = block['nuisance_strong_lensing', 'log_a_ani']
+            a_ani = 10**log_a_ani
+        elif self.analysis == 'tdcosmo2025': # in TDCOSMO2025 we use a linear prior on a_ani, because we now use constant anisotropy models
+            a_ani = block['nuisance_strong_lensing', 'a_ani']
+            gamma_pl_RXJ1131 = block['nuisance_strong_lensing', 'gamma_pl_RXJ1131']
         
         log_a_ani_sigma = block['nuisance_strong_lensing', 'log_a_ani_sigma']
         a_ani_sigma = 10**log_a_ani_sigma
@@ -120,9 +153,11 @@ class TDCOSMOlenses:
                             'lambda_mst_sigma': lambda_mst_sigma,  # Gaussian sigma of the distribution of lambda_mst
                             'alpha_lambda': alpha_lambda,  # slope of lambda_mst with r_eff/theta_E
                             }
-        kwargs_kin_test = {'a_ani': a_ani,  # mean a_ani anisotropy parameter in the OM model
+        kwargs_kin_test = {'a_ani': a_ani,  # mean a_ani anisotropy parameter in the OM model or constant model
                            'a_ani_sigma': a_ani_sigma,  # sigma(a_ani)⟨a_ani⟩ is the 1-sigma Gaussian scatter in a_ani
                            }
+        if self.analysis == 'tdcosmo2025':
+            kwargs_lens_test['gamma_pl_list'] = [gamma_pl_RXJ1131] #adding the gamma_pl for RXJ1131 only, as in TDCOSMO2025
 
         logl = self._likelihood.log_likelihood(cosmo=cosmo, kwargs_lens=kwargs_lens_test, kwargs_kin=kwargs_kin_test)
 
