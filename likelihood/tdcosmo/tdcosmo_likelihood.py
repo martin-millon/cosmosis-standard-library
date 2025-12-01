@@ -5,6 +5,7 @@ from hierarc.Likelihood.lens_sample_likelihood import LensSampleLikelihood
 from astropy.cosmology import w0waCDM
 from astropy.constants import c
 from lenstronomy.Cosmo.cosmo_interp import CosmoInterp
+import copy
 
 
 class TDCOSMOlenses:
@@ -12,7 +13,7 @@ class TDCOSMOlenses:
     This class reproduces the likelihood from https://arxiv.org/abs/2007.02941 (Fig. 7, purple contours). 
     '''
     def __init__(self, options):
-        dir_path = os.path.dirname(__file__)
+        self.dir_path = os.path.dirname(__file__)
 
         self.data_sets = options.get_string("data_sets", default='tdcosmo2025')
         self.analysis = options.get_string("analysis", default='tdcosmo2025')
@@ -20,23 +21,24 @@ class TDCOSMOlenses:
         self._distances_computation_module = options.get_string("distances_computation_module", default='astropy')
 
         # 7 TDCOSMO lenses (TDCOSMO IV)
-        file = open(os.path.join(dir_path, 'tdcosmo7_likelihood_processed.pkl'), 'rb')
+        file = open(os.path.join(self.dir_path, 'tdcosmo7_likelihood_processed.pkl'), 'rb')
         tdcosmo7_likelihood_processed = pickle.load(file)
         file.close()
 
         # 33 SLACS lenses with SDSS spectroscopy (TDCOSMO IV) -- OUTDATED, DO NOT USE
-        file = open(os.path.join(dir_path, 'slacs_sdss_likelihood_processed.pkl'), 'rb')
+        file = open(os.path.join(self.dir_path, 'slacs_sdss_likelihood_processed.pkl'), 'rb')
         slacs_sdss_likelihood_processed = pickle.load(file)
         file.close()
 
         # 5 SLACS with IFU
-        file = open(os.path.join(dir_path, 'slacs_ifu_likelihood_processed.pkl'), 'rb')
+        file = open(os.path.join(self.dir_path, 'slacs_ifu_likelihood_processed.pkl'), 'rb')
         slacs_ifu_likelihood_processed = pickle.load(file)
         file.close()
 
         # TDCOSMO2025 (8 Time-delay lenses)
-        file = open(os.path.join(dir_path, 'tdcosmo2025_likelihood_processed_const_.pkl'), 'rb')
+        file = open(os.path.join(self.dir_path, 'tdcosmo2025_likelihood_processed_const_.pkl'), 'rb')
         tdcosmo2025_likelihood_processed = pickle.load(file)
+        tdcosmo2025_likelihood_processed = self.read_kin_correction(tdcosmo2025_likelihood_processed, 'TDCOSMO')
         file.close()
 
         # here we update each individual lens likelihood configuration with the setting of the Monte-Carlo marginalization over hyper-parameter distributions
@@ -162,6 +164,34 @@ class TDCOSMOlenses:
         logl = self._likelihood.log_likelihood(cosmo=cosmo, kwargs_lens=kwargs_lens_test, kwargs_kin=kwargs_kin_test)
 
         return float(logl)
+
+    def read_kin_correction(self, likelihood_list_selected, sample_name):
+        if sample_name == "SLACS_IFU":
+            file_name = os.path.join(self.dir_path, "kin_axi_jam_scaling/kcwi_correction.pickle")
+        elif sample_name == "SL2S":
+            file_name = os.path.join(self.dir_path,"kin_axi_jam_scaling/sl2s_correction.pickle")
+        elif sample_name == "TDCOSMO":
+            file_name = os.path.join(self.dir_path,"kin_axi_jam_scaling/tdcosmo_correction.pickle")
+        else:
+            raise ValueError("Sample name for kinematic correction not recognized. Choose either 'SLACS_IFU', 'SL2S' or 'TDCOSMO'")
+
+        with open(file_name, "rb") as f:  # read in pre-saved correction file
+            jam_scaling = pickle.load(f)
+
+        likelihood_list_new = copy.deepcopy(likelihood_list_selected)
+
+        name_list = [x["name"] for x in likelihood_list_new]
+        for name in name_list:
+            if name not in [x["name"] for x in jam_scaling]:
+                print("no axisymmetric jam scaling for lens %s" % name)
+            else:
+                pos = name_list.index(name)
+                correction = [
+                    x["correction_combined"] for x in jam_scaling if x["name"] == name
+                ]
+                likelihood_list_new[pos]["vel_disp_scaling_distributions"] = correction[0]
+
+        return likelihood_list_new
 
 
 def setup(options):
