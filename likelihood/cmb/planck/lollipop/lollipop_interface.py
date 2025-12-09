@@ -11,7 +11,6 @@ nuisance_parameters = [
 ]
 
 def setup(options):
-    raise RuntimeError("We are not quite sure if the Hillipop and Lollipop interfaces are correctly set up yet. You can remove this line to help test.")
     mode = options.get_string(option_section, "mode", default="TTTEEE").lower()
     if mode == "lowle":
         calculator = lowlE()
@@ -39,12 +38,11 @@ def execute(block, config):
     calculator = config
 
     cl = {}
-    cl["ee"] = block['cmb_cl', 'ee']
-    cl["bb"] = block['cmb_cl', 'bb']
-
+    # lollipop wants the actual Cl w/o prefactors
     ell = block['cmb_cl', 'ell']
+    cl["ee"] = block['cmb_cl', 'ee'] * 2*np.pi / (ell * (ell+1))
+    cl["bb"] = block['cmb_cl', 'bb'] * 2*np.pi / (ell * (ell+1))
     make_cl_start_at_zero(cl, ell)
-
 
     nuisance = {}
     for param in nuisance_parameters:
