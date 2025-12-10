@@ -88,6 +88,7 @@ def theta_to_H0(theta, omnuh2, mnu, TCMB, omch2, ombh2, omega_k, num_massive_neu
     try:
         camb.set_feedback_level(0)
         p = camb.CAMBparams()
+        p.set_dark_energy(w=w, wa=wa, dark_energy_model='ppf')
         p.set_cosmology(ombh2 = ombh2,
                         omch2 = omch2,
                         omk = omega_k,
@@ -95,7 +96,6 @@ def theta_to_H0(theta, omnuh2, mnu, TCMB, omch2, ombh2, omega_k, num_massive_neu
                         num_massive_neutrinos=num_massive_neutrinos,
                         nnu=nnu,
                         cosmomc_theta = theta)
-        p.set_dark_energy(w=w, wa=wa, dark_energy_model='ppf')
         H0 = p.h * 100
     except:
         H0 = np.nan
