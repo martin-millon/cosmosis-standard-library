@@ -625,7 +625,7 @@ class Lbias_expansion(object):
         z_vector = np.linspace(z_in, z_fin, nz)
         a_vector = 1 / (1 + z_vector)
         H_vector = self.Hubble(expfactor=a_vector, **hpars)
-        return 3e3 * hpars['hubble']*100 / np.trapz(H_vector, x=z_vector)
+        return 3e3 * hpars['hubble']*100 / np.trapezoid(H_vector, x=z_vector)
 
 
 def load_lpt_emu(verbose=True):

@@ -34,7 +34,7 @@ def load_histogram_form(ext, bin, upsampling):
         sample_bin = np.digitize(z, zlow) - 1
         nz = ext.data['BIN{0}'.format(bin)][sample_bin]
 
-    norm = np.trapz(nz, z)
+    norm = np.trapezoid(nz, z)
     nz /= norm
 
     return z, nz
@@ -165,10 +165,10 @@ def setup(options):
 
         for ibin in np.arange(n_bins):
             zmid, nz[iext, ibin] = load_histogram_form(ext, ibin+1, upsampling)
-            nz_mean[iext, ibin] = np.trapz(nz[iext, ibin]*zmid, zmid)
+            nz_mean[iext, ibin] = np.trapezoid(nz[iext, ibin]*zmid, zmid)
             if mode == 'invchi':
                 chi, gchi[iext, ibin] = nz_to_gchi(zmid, nz[iext, ibin])
-                inv_chi_mean[iext, ibin] = np.trapz(nz[iext, ibin]/chi, chi)
+                inv_chi_mean[iext, ibin] = np.trapezoid(nz[iext, ibin]/chi, chi)
 
     if mode == 'mean':
         xx = nz_mean[:,bin_ranks-1]

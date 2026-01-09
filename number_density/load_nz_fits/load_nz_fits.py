@@ -71,7 +71,7 @@ def load_histogram_form(ext, upsampling):
     nz = np.array(nz)
     z, nz = ensure_starts_at_zero(z, nz)
     for col in nz:
-        norm = np.trapz(col, z)
+        norm = np.trapezoid(col, z)
         col /= norm
 
     return z, nz

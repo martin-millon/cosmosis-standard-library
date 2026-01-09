@@ -61,7 +61,7 @@ def execute(block, config):
         else:
             raise ValueError("Unknown photo-z mode")
         # normalize
-        nz_biased /= np.trapz(nz_biased, z)
+        nz_biased /= np.trapezoid(nz_biased, z)
         #calculate delta z output
         if config["output_deltaz"]:
             mean_z_shifted=np.average(z,weights=nz_biased)

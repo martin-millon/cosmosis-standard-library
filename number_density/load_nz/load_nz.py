@@ -59,7 +59,7 @@ def setup(options):
 
     # Normalize n(z)
     for col in n_of_z:
-        norm = np.trapz(col, z)
+        norm = np.trapezoid(col, z)
         col /= norm
 
     print("Found %d samples and %d bins in redshift in file %s" % (nbin, nz, filename))
