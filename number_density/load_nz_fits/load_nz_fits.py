@@ -1,6 +1,9 @@
 from __future__ import print_function
 from cosmosis.datablock import names, option_section
 import numpy as np
+# Compatibility for numpy 1.x
+if np.__version__.startswith('1.'):
+    np.trapezoid = np.trapz
 import scipy.interpolate
 try:
     import astropy.io.fits as pyfits

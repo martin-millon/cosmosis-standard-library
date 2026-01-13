@@ -2,6 +2,9 @@ from builtins import range
 from cosmosis.datablock import option_section, names
 from scipy.interpolate import interp1d
 import numpy as np
+# Compatibility for numpy 1.x
+if np.__version__.startswith('1.'):
+    np.trapezoid = np.trapz
 
 MODES = ["skew", "mean", "width"]
 

@@ -5,6 +5,9 @@
 from builtins import zip
 from builtins import range
 import numpy as np
+# Compatibility for numpy 1.x
+if np.__version__.startswith('1.'):
+    np.trapezoid = np.trapz
 from cosmosis.datablock import names as section_names
 from cosmosis.datablock import option_section
 import scipy.interpolate

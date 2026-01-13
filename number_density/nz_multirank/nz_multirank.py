@@ -3,6 +3,9 @@ try:
 except:
     option_section = "options"
 import numpy as np
+# Compatibility for numpy 1.x
+if np.__version__.startswith('1.'):
+    np.trapezoid = np.trapz
 from scipy.optimize import linear_sum_assignment
 #import matplotlib.pyplot as plt
 from nz_gz import nz_to_gchi
