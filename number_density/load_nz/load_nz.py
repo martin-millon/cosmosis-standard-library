@@ -1,6 +1,9 @@
 from __future__ import print_function
 from builtins import range
 import numpy as np
+# Compatibility for numpy 1.x
+if np.__version__.startswith('1.'):
+    np.trapezoid = np.trapz
 from cosmosis.datablock import option_section, names as section_names
 
 
@@ -59,7 +62,7 @@ def setup(options):
 
     # Normalize n(z)
     for col in n_of_z:
-        norm = np.trapz(col, z)
+        norm = np.trapezoid(col, z)
         col /= norm
 
     print("Found %d samples and %d bins in redshift in file %s" % (nbin, nz, filename))

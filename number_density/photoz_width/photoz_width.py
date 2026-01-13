@@ -2,6 +2,9 @@ from builtins import range
 from cosmosis.datablock import option_section, names
 from scipy.interpolate import interp1d
 import numpy as np
+# Compatibility for numpy 1.x
+if np.__version__.startswith('1.'):
+    np.trapezoid = np.trapz
 
 MODES = ["stretch"]
 
@@ -50,7 +53,7 @@ def execute(block, config):
             raise ValueError("Unknown photo-z mode")
 
         # normalize
-        nz_biased /= np.trapz(nz_biased, z)
+        nz_biased /= np.trapezoid(nz_biased, z)
         block[pz, bin_name] = nz_biased
     return 0
 
