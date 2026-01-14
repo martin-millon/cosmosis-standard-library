@@ -114,6 +114,8 @@ class CandlCosmoSISLikelihood:
             ):
                 keep_prior_ix.append(i)
         self.candl_like.priors = [self.candl_like.priors[i] for i in keep_prior_ix]
+        self.candl_cov = self.candl_like.covariance
+        self.candl_inv_cov = np.linalg.inv(self.candl_cov)
 
     def reformat(self, block):
         """
@@ -249,6 +251,8 @@ class CandlCosmoSISLikelihood:
             block[names.likelihoods, f"{self.name}_like"] = like
             block[names.data_vector, f"{self.name}_theory"] = theory
             block[names.data_vector, f"{self.name}_data"] = data
+            block[names.data_vector, f"{self.name}_covariance"] = self.candl_cov
+            block[names.data_vector, f"{self.name}_inverse_covariance"] = self.candl_inv_cov
         return 0
 
 
