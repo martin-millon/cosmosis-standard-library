@@ -2,6 +2,11 @@ import numpy as np
 from cosmosis.datablock import names
 from cosmosis.datablock import option_section
 from cosmosis.datablock.cosmosis_py import errors
+import os
+import sys
+
+dirname = os.path.split(__file__)[0]
+sys.path.append(os.path.join(dirname, os.pardir))
 
 import twopoint as twopoint
 

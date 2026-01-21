@@ -5,6 +5,9 @@
 from builtins import zip
 from builtins import range
 import numpy as np
+# Compatibility for numpy 1.x
+if np.__version__.startswith('1.'):
+    np.trapezoid = np.trapz
 from cosmosis.datablock import names as section_names
 from cosmosis.datablock import option_section
 import scipy.interpolate
@@ -99,7 +102,7 @@ def compute_bin_nz(z_prob_matrix, z, edges, ngal):
 
         # Normalise the n(z) in each redshift bin to 1 over the redshift range
         # of the survey
-        ni_integral = np.trapz(ni,z)
+        ni_integral = np.trapezoid(ni,z)
     
         ni *= 1.0 / ni_integral
         assert(len(ni) == len(z))
@@ -121,7 +124,7 @@ def get_ngals_presmooth(nz_true,z,edges,ngaltot):
     for low, high in zip(edges[:-1], edges[1:]):
         w = (z>low)*(z<high)
         wnz = w*nz_true
-        integrals.append(np.trapz(wnz,z))
+        integrals.append(np.trapezoid(wnz,z))
     integrals = np.array(integrals)
     inttot = integrals.sum()
     ngal_fracs = integrals/inttot

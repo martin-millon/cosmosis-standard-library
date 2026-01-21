@@ -2,6 +2,9 @@ from builtins import range
 from cosmosis.datablock import option_section, names
 from scipy.interpolate import interp1d
 import numpy as np
+# Compatibility for numpy 1.x
+if np.__version__.startswith('1.'):
+    np.trapezoid = np.trapz
 
 MODES = ["skew", "mean", "width"]
 
@@ -77,7 +80,7 @@ def execute(block, config):
             np.putmask(nz_biased, nz_biased < 0., 0.)
 
         # normalise
-        nz_biased /= np.trapz(nz_biased, z)
+        nz_biased /= np.trapezoid(nz_biased, z)
 
         # Add a population of catastrophic outliers
         # See Hearin et al (2010)
@@ -101,7 +104,7 @@ def execute(block, config):
             if cat_mode == 'island':
                 pcat = (1. / (2.0 * np.pi)**0.5 / sigcat) * np.exp(-1.0 *
                                                                    (z - zcat) * (z - zcat) / (2. * sigcat * sigcat))
-                pcat *= np.trapz(step * fcat * nz_biased, z)
+                pcat *= np.trapezoid(step * fcat * nz_biased, z)
                 nz_biased = (1. - step * fcat) * nz_biased + pcat
 
             # Or scatter it uniformly across the theory redshift range
@@ -110,7 +113,7 @@ def execute(block, config):
                     step * fcat / (z[-1] - z[0])
 
         # renormalise
-        nz_biased /= np.trapz(nz_biased, z)
+        nz_biased /= np.trapezoid(nz_biased, z)
         block[pz, bin_name] = nz_biased
 
     block[pz, 'z'] = z
