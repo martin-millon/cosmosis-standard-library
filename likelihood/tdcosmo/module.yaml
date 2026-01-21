@@ -1,7 +1,7 @@
 name: tdcosmo
 version: '2023'
-purpose: Likelihood of the TDCOSMO IV analysis
-url: 10.1051/0004-6361/202038861
+purpose: Likelihood of the TDCOSMO analyses
+url: 10.1051/0004-6361/202555801
 interface: tdcosmo_likelihood.py
 attribution:
   - TDCOSMO 2025 et al. (https://arxiv.org/abs/2506.03023)
@@ -9,7 +9,7 @@ attribution:
   - Martin Millon, Judit Prat and Simon Birrer for the cosmoSIS implementation
 rules: None.
 cite:
-  - TDCOSMO Collaboration et al. 2025, arXiv:2506.03023
+  - TDCOSMO Collaboration et al. 2025, A&A, 704, A63
   - Birrer et al., 2020, A&A, 643, A165
   - Suyu et al., 2010, ApJ, 711, 201
   - Suyu et al., 2014, ApJ, 788, L35
@@ -26,14 +26,15 @@ assumptions:
   -   Hierarchical inference of the mass model and stellar anisotropy parameters
 explanation: | 
     This module contain the likelihood of a 8 time-delay lenses, presented in TDCOSMO 2025 (TDCOSMO collaboration et al., 2025).
-    Alternatively one can recover the previous analysis from TDCOSMO IV (Birrer et al., 2020) by choosing the 'tdcosmo_iv' analysis option.
     This module allows us to reproduce the hierarchical inference of the cosmological parameters and of the lens population parameters,
     which are grouped under the block `nuisance_strong_lensing` (see details below). 
-    
-    For the TDCOSMO IV analysis, additional data sets such as 'SLACS_SDSS' and 'SLACS_IFU' can be added to the 'tdcosmo7' data set to help constrain these parameters.
-    However, it is not recommended to use the 'SLACS_SDSS' data set anymore (see TDCOSMO 2025 for details).
-    Adding these 2 data sets requires to make the additional assumption that the lensing galaxy of the 7 TDCOSMO lenses and of the SLACS lenses 
+    For the TDCOSMO 2025 analysis, additional data sets such as 'SLACS_KCWI' (11 lenses) and 'SL2S' (4 lenses) can be added to the 'tdcosmo2025' data set to help constrain these parameters.
+    Adding these 2 data sets requires to make the additional assumption that the lensing galaxy of the 8 TDCOSMO lenses and of the SLACS and SL2S lenses 
     come from the same population of galaxies.
+  
+    Alternatively one can recover the previous analysis from TDCOSMO IV (Birrer et al., 2020) by choosing the 'tdcosmo_iv' analysis option.
+    For the TDCOSMO IV analysis, additional data sets such as 'SLACS_SDSS' and 'SLACS_IFU' can be added to the 'tdcosmo7' data set to help constrain these parameters.
+    However, it is NOT recommended to use the 'SLACS_SDSS' data set anymore (see TDCOSMO 2025 for details).
 
 params:
   analysis:
@@ -41,7 +42,7 @@ params:
     type: str
     default: 'tdcosmo2025'
   data_sets:
-    meaning: Data sets to use. For the 'tdcosmo_iv' analysis, choose any combination of 'tdcosmo7', 'SLACS_SDSS' and 'SLACS_IFU'. You can use 'tdcosmo7+SLACS_SDSS' or 'tdcosmo7+SLACS_SDSS+SLACS_IFU' for example. For the 'tdcosmo2025' analysis, only 'tdcosmo2025' is implemented. External data sets are not supported yet.
+    meaning: Data sets to use. For the 'tdcosmo_iv' analysis, choose any combination of 'tdcosmo7', 'SLACS_SDSS' and 'SLACS_IFU'. You can use 'tdcosmo7+SLACS_SDSS' or 'tdcosmo7+SLACS_SDSS+SLACS_IFU' for example. For the 'tdcosmo2025' analysis, available data sets are 'tdcosmo2025', 'SLACS_KCWI' and 'SL2S'. You can use 'tdcosmo2025+SLACS_KCWI' or 'tdcosmo2025+SLACS_KCWI+SL2S' for example.
     type: str
     default: 'tdcosmo2025'
 
@@ -102,6 +103,61 @@ inputs:
       meaning: Power-law slope of RXJ1131 lens mass profile. Used only in 'tdcosmo2025' analysis. The slope will be constrained using JWST NIRSpec IFU kinematics data.
       type: real
       default: 1.95
+
+    gamma_pl_SLACS_KCWI0:
+      meaning: Power-law slope of SDSSJ0029-0055 lens mass profile. Used only in 'tdcosmo2025' analysis + 'SLACS_KCWI' data_sets. The slope will be constrained using KCWI IFU kinematics data.
+      type: real
+      default: 2.0
+
+    gamma_pl_SLACS_KCWI1:
+      meaning: Power-law slope of SDSSJ0037-0942 lens mass profile. Used only in 'tdcosmo2025' analysis + 'SLACS_KCWI' data_sets. The slope will be constrained using KCWI IFU kinematics data.
+      type: real
+      default: 2.0
+
+    gamma_pl_SLACS_KCWI2:
+      meaning: Power-law slope of SDSSJ1112+0826 lens mass profile. Used only in 'tdcosmo2025' analysis + 'SLACS_KCWI' data_sets. The slope will be constrained using KCWI IFU kinematics data.
+      type: real
+      default: 2.0
+
+    gamma_pl_SLACS_KCWI3:
+      meaning: Power-law slope of SDSSJ1204+0358 lens mass profile. Used only in 'tdcosmo2025' analysis + 'SLACS_KCWI' data_sets. The slope will be constrained using KCWI IFU kinematics data.
+      type: real
+      default: 2.0
+
+    gamma_pl_SLACS_KCWI4:
+      meaning: Power-law slope of SDSSJ1250+0523 lens mass profile. Used only in 'tdcosmo2025' analysis + 'SLACS_KCWI' data_sets. The slope will be constrained using KCWI IFU kinematics data.
+      type: real
+      default: 2.0
+
+    gamma_pl_SLACS_KCWI5:
+      meaning: Power-law slope of SDSSJ1306+0600 lens mass profile. Used only in 'tdcosmo2025' analysis + 'SLACS_KCWI' data_sets. The slope will be constrained using KCWI IFU kinematics data.
+      type: real
+      default: 2.0
+
+    gamma_pl_SLACS_KCWI6:
+      meaning: Power-law slope of SDSSJ1402+6321 lens mass profile. Used only in 'tdcosmo2025' analysis + 'SLACS_KCWI' data_sets. The slope will be constrained using KCWI IFU kinematics data.
+      type: real
+      default: 2.0
+
+    gamma_pl_SLACS_KCWI7:
+      meaning: Power-law slope of SDSSJ1531-0105 lens mass profile. Used only in 'tdcosmo2025' analysis + 'SLACS_KCWI' data_sets. The slope will be constrained using KCWI IFU kinematics data.
+      type: real
+      default: 2.0
+
+    gamma_pl_SLACS_KCWI8:
+      meaning: Power-law slope of SDSSJ1621+3931 lens mass profile. Used only in 'tdcosmo2025' analysis + 'SLACS_KCWI' data_sets. The slope will be constrained using KCWI IFU kinematics data.
+      type: real
+      default: 2.0
+
+    gamma_pl_SLACS_KCWI9:
+      meaning: Power-law slope of SDSSJ1627-0053 lens mass profile. Used only in 'tdcosmo2025' analysis + 'SLACS_KCWI' data_sets. The slope will be constrained using KCWI IFU kinematics data.
+      type: real
+      default: 2.0
+
+    gamma_pl_SLACS_KCWI10:
+      meaning: Power-law slope of SDSSJ1630+4520 lens mass profile. Used only in 'tdcosmo2025' analysis + 'SLACS_KCWI' data_sets. The slope will be constrained using KCWI IFU kinematics data.
+      type: real
+      default: 2.0
 
 outputs:
   likelihoods:
