@@ -42,7 +42,7 @@ class PantheonLikelihood(GaussianLikelihood):
             print("Using PantheonPlus only (not include SHOES)")
 
         print("Loading data from {}".format(filename))
-        data = pd.read_csv(filename, delim_whitespace=True)
+        data = pd.read_csv(filename, sep=r"\s+")
         self.origlen = len(data)
         
         if self.include_shoes:
