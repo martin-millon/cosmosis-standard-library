@@ -1,5 +1,6 @@
 import os
 import pickle
+import hierarc
 from cosmosis.datablock import names, SectionOptions
 from hierarc.Likelihood.lens_sample_likelihood import LensSampleLikelihood
 from astropy.cosmology import w0waCDM
@@ -8,7 +9,9 @@ from lenstronomy.Cosmo.cosmo_interp import CosmoInterp
 import numpy as np
 import pandas as pd
 import copy
-
+import warnings
+from packaging import version
+hierarc_version = hierarc.__version__
 
 class TDCOSMOlenses:
     '''
@@ -22,81 +25,83 @@ class TDCOSMOlenses:
         self._num_distribution_draws = options.get_int("num_distribution_draws", default=200)
         self._distances_computation_module = options.get_string("distances_computation_module", default='astropy')
 
-        # TDCOSMO IV data sets
-        # 7 TDCOSMO lenses (TDCOSMO IV)
-        file = open(os.path.join(self.dir_path, 'tdcosmo7_likelihood_processed.pkl'), 'rb')
-        tdcosmo7_likelihood_processed = pickle.load(file)
-        file.close()
+        if self.analysis == 'tdcosmo_iv':
+            # TDCOSMO IV data sets
+            # 7 TDCOSMO lenses (TDCOSMO IV)
+            file = open(os.path.join(self.dir_path, 'tdcosmo7_likelihood_processed.pkl'), 'rb')
+            tdcosmo7_likelihood_processed = pickle.load(file)
+            file.close()
 
-        # 33 SLACS lenses with SDSS spectroscopy (TDCOSMO IV) -- OUTDATED, DO NOT USE
-        file = open(os.path.join(self.dir_path, 'slacs_sdss_likelihood_processed.pkl'), 'rb')
-        slacs_sdss_likelihood_processed = pickle.load(file)
-        file.close()
+            # 33 SLACS lenses with SDSS spectroscopy (TDCOSMO IV) -- OUTDATED, DO NOT USE
+            file = open(os.path.join(self.dir_path, 'slacs_sdss_likelihood_processed.pkl'), 'rb')
+            slacs_sdss_likelihood_processed = pickle.load(file)
+            file.close()
 
-        # 5 SLACS with IFU
-        file = open(os.path.join(self.dir_path, 'slacs_ifu_likelihood_processed.pkl'), 'rb')
-        slacs_ifu_likelihood_processed = pickle.load(file)
-        file.close()
+            # 5 SLACS with IFU
+            file = open(os.path.join(self.dir_path, 'slacs_ifu_likelihood_processed.pkl'), 'rb')
+            slacs_ifu_likelihood_processed = pickle.load(file)
+            file.close()
 
-        # TDCOSMO 2025 data sets
-        # TDCOSMO2025 (8 Time-delay lenses)
-        file = open(os.path.join(self.dir_path, 'tdcosmo2025_likelihood_processed_const_.pkl'), 'rb')
-        tdcosmo2025_likelihood_processed = pickle.load(file)
-        file.close()
+            # here we update each individual lens likelihood configuration with the setting of the Monte-Carlo marginalization over hyper-parameter distributions
+            for lens in tdcosmo7_likelihood_processed:
+                lens['num_distribution_draws'] = self._num_distribution_draws
+            for lens in slacs_sdss_likelihood_processed:
+                lens['num_distribution_draws'] = self._num_distribution_draws
+            for lens in slacs_ifu_likelihood_processed:
+                lens['num_distribution_draws'] = self._num_distribution_draws
 
-        # SLACS with KCWI from the TDCOSMO 2025 analysis (11 SLACS )
-        slacs_kcwi_likelihood = 'slacs_kcwi_const_processed.pkl'
-        file = open(os.path.join(self.dir_path, slacs_kcwi_likelihood), 'rb')
-        slacs_kcwi_likelihood_processed = pickle.load(file)
-        file.close()
+        elif self.analysis == 'tdcosmo2025':
+            # TDCOSMO 2025 data sets
+            # TDCOSMO2025 (8 Time-delay lenses)
+            file = open(os.path.join(self.dir_path, 'tdcosmo2025_likelihood_processed_const_.pkl'), 'rb')
+            tdcosmo2025_likelihood_processed = pickle.load(file)
+            file.close()
 
-        # SL2S from the TDCOSMO 2025 analysis (4 lenses)
-        sl2s_likelihood = 'sl2s_const_processed_all.pkl'
-        file = open(os.path.join(self.dir_path, sl2s_likelihood), 'rb')
-        sl2s_likelihood_processed = pickle.load(file)
-        file.close()
+            # SLACS with KCWI from the TDCOSMO 2025 analysis (11 SLACS )
+            slacs_kcwi_likelihood = 'slacs_kcwi_const_processed.pkl'
+            file = open(os.path.join(self.dir_path, slacs_kcwi_likelihood), 'rb')
+            slacs_kcwi_likelihood_processed = pickle.load(file)
+            file.close()
 
-        #apply quality cut
-        slacs_kcwi_likelihood_processed = self.quality_cut(slacs_kcwi_likelihood_processed)
-        sl2s_likelihood_processed = self.quality_cut(sl2s_likelihood_processed)
+            # SL2S from the TDCOSMO 2025 analysis (4 lenses)
+            sl2s_likelihood = 'sl2s_const_processed_all.pkl'
+            file = open(os.path.join(self.dir_path, sl2s_likelihood), 'rb')
+            sl2s_likelihood_processed = pickle.load(file)
+            file.close()
 
-        #add kaapa_ext correction
-        slacs_kcwi_likelihood_processed = self.add_kappa_dist(slacs_kcwi_likelihood_processed, 'SLACS')
-        sl2s_likelihood_processed = self.add_kappa_dist(sl2s_likelihood_processed, 'SL2S')
+            #apply quality cut
+            slacs_kcwi_likelihood_processed = self.quality_cut(slacs_kcwi_likelihood_processed)
+            sl2s_likelihood_processed = self.quality_cut(sl2s_likelihood_processed)
 
-        lens_selected_slacs_kcwi = ['SDSSJ0029-0055', 'SDSSJ0037-0942', 'SDSSJ1112+0826', 'SDSSJ1204+0358', 'SDSSJ1250+0523',
-                               'SDSSJ1306+0600', 'SDSSJ1402+6321', 'SDSSJ1531-0105', 'SDSSJ1621+3931', 'SDSSJ1627-0053',
-                               'SDSSJ1630+4520']
+            #add kaapa_ext correction
+            slacs_kcwi_likelihood_processed = self.add_kappa_dist(slacs_kcwi_likelihood_processed, 'SLACS')
+            sl2s_likelihood_processed = self.add_kappa_dist(sl2s_likelihood_processed, 'SL2S')
 
-        lens_selected_sl2s = ['SL2SJ0226-0420', 'SL2SJ0855-0147', 'SL2SJ0904-0059', 'SL2SJ2221+0115']
+            lens_selected_slacs_kcwi = ['SDSSJ0029-0055', 'SDSSJ0037-0942', 'SDSSJ1112+0826', 'SDSSJ1204+0358', 'SDSSJ1250+0523',
+                                   'SDSSJ1306+0600', 'SDSSJ1402+6321', 'SDSSJ1531-0105', 'SDSSJ1621+3931', 'SDSSJ1627-0053',
+                                   'SDSSJ1630+4520']
 
-        lens_selected_tdcosmo2025 = ['B1608+656', 'RXJ1131-1231', 'HE0435-1223', 'SDSS1206+4332', 'WFI2033-4723',
-                                 'PG1115+080', 'DES0408-5354', 'WGD2038-4008']
+            lens_selected_sl2s = ['SL2SJ0226-0420', 'SL2SJ0855-0147', 'SL2SJ0904-0059', 'SL2SJ2221+0115']
 
-        #apply the selection
-        slacs_kcwi_likelihood_processed = self.selected_likelihood(lens_selected_slacs_kcwi, slacs_kcwi_likelihood_processed)
-        sl2s_likelihood_processed = self.selected_likelihood(lens_selected_sl2s, sl2s_likelihood_processed)
-        tdcosmo2025_likelihood_processed = self.selected_likelihood(lens_selected_tdcosmo2025, tdcosmo2025_likelihood_processed)
+            lens_selected_tdcosmo2025 = ['B1608+656', 'RXJ1131-1231', 'HE0435-1223', 'SDSS1206+4332', 'WFI2033-4723',
+                                     'PG1115+080', 'DES0408-5354', 'WGD2038-4008']
 
-        #apply axi symetric JAM kinematic correction
-        tdcosmo2025_likelihood_processed = self.read_kin_correction(tdcosmo2025_likelihood_processed, 'TDCOSMO')
-        sl2s_likelihood_processed = self.read_kin_correction(sl2s_likelihood_processed, 'SL2S')
-        slacs_kcwi_likelihood_processed = self.read_kin_correction(slacs_kcwi_likelihood_processed, 'SLACS_KCWI')
+            #apply the selection
+            slacs_kcwi_likelihood_processed = self.selected_likelihood(lens_selected_slacs_kcwi, slacs_kcwi_likelihood_processed)
+            sl2s_likelihood_processed = self.selected_likelihood(lens_selected_sl2s, sl2s_likelihood_processed)
+            tdcosmo2025_likelihood_processed = self.selected_likelihood(lens_selected_tdcosmo2025, tdcosmo2025_likelihood_processed)
 
-        # here we update each individual lens likelihood configuration with the setting of the Monte-Carlo marginalization over hyper-parameter distributions
-        for lens in tdcosmo7_likelihood_processed:
-            lens['num_distribution_draws'] = self._num_distribution_draws
-        for lens in slacs_sdss_likelihood_processed:
-            lens['num_distribution_draws'] = self._num_distribution_draws
-        for lens in slacs_ifu_likelihood_processed:
-            lens['num_distribution_draws'] = self._num_distribution_draws
+            #apply axi symetric JAM kinematic correction
+            tdcosmo2025_likelihood_processed = self.read_kin_correction(tdcosmo2025_likelihood_processed, 'TDCOSMO')
+            sl2s_likelihood_processed = self.read_kin_correction(sl2s_likelihood_processed, 'SL2S')
+            slacs_kcwi_likelihood_processed = self.read_kin_correction(slacs_kcwi_likelihood_processed, 'SLACS_KCWI')
 
-        for lens in tdcosmo2025_likelihood_processed:
-            lens['num_distribution_draws'] = self._num_distribution_draws
-        for lens in slacs_kcwi_likelihood_processed:
-            lens['num_distribution_draws'] = self._num_distribution_draws
-        for lens in sl2s_likelihood_processed:
-            lens['num_distribution_draws'] = self._num_distribution_draws
+            for lens in tdcosmo2025_likelihood_processed:
+                lens['num_distribution_draws'] = self._num_distribution_draws
+            for lens in slacs_kcwi_likelihood_processed:
+                lens['num_distribution_draws'] = self._num_distribution_draws
+            for lens in sl2s_likelihood_processed:
+                lens['num_distribution_draws'] = self._num_distribution_draws
 
 
         # ====================
@@ -106,19 +111,30 @@ class TDCOSMOlenses:
         # hear we build a likelihood instance for the sample of 7 TDCOSMO lenses,
         lens_list = []
         if self.analysis == 'tdcosmo_iv':
-            kwargs_global_model = None
+            warnings.warn(
+                "TDCOSMO IV is outdated. Use TDCOSMO2025 instead.",
+                category=DeprecationWarning,
+                stacklevel=2
+            )
+            if version.parse(hierarc_version) >= version.parse("1.2.0"):
+                raise ValueError("TDCOSMO IV analysis is not compatible with hierarc versions >= 1.2.0. Please use TDCOSMO2025 analysis instead or revert hierarc to version 1.1.2.")
+
             if 'tdcosmo7' in self.data_sets:
                 lens_list += tdcosmo7_likelihood_processed
             if 'SLACS_SDSS' in self.data_sets:
-                raise Warning("SLACS_SDSS data set is outdated, do not use it. Use SLACS_IFU or the TDCOSMO2025 data set instead.")
+                warnings.warn("SLACS_SDSS data set is outdated, do not use it. Use SLACS_IFU or the TDCOSMO2025 data set instead.",
+                              category=DeprecationWarning, stacklevel=2)
                 lens_list += slacs_sdss_likelihood_processed
             if 'SLACS_IFU' in self.data_sets:
                 lens_list += slacs_ifu_likelihood_processed
 
             assert len(
                 lens_list) > 0, "Data not found ! Add at least one of those 3 data sets 'tdcosmo7', 'SLACS_SDSS' or 'SLACS_IFU'"
+            self._likelihood = LensSampleLikelihood(lens_list)
 
         elif self.analysis == 'tdcosmo2025':
+            if version.parse(hierarc_version) < version.parse("1.2.0"):
+                raise ValueError("TDCOSMO2025 analysis is only compatible with hierarc versions >= 1.2.0")
             kwargs_global_model =  {'lambda_mst_sampling': True,
                       'lambda_mst_distribution': 'GAUSSIAN',
                       'anisotropy_sampling': True,
@@ -139,11 +155,10 @@ class TDCOSMOlenses:
 
             assert len(
                 lens_list) > 0, "Data not found ! Add the data set 'tdcosmo2025'"
+            self._likelihood = LensSampleLikelihood(lens_list, kwargs_global_model=kwargs_global_model)
         else:
             raise ValueError("Analysis not recognized. Choose either 'tdcosmo_iv' or 'tdcosmo2025'")
 
-        # choose which likelihood you want here:
-        self._likelihood = LensSampleLikelihood(lens_list, kwargs_global_model=kwargs_global_model)
 
         # choose if you want the full astropy distance calculation or a interpolated version of it (for speed-up)
         self._interpolate_distances_type = 'None'
